@@ -14,10 +14,11 @@ class AndOrDagNode {
     std::vector<size_t> parentIdx;  // Parent node indices
     std::vector<LabelOrInverse> startLabel, endLabel; // Start/end labels for equivalence nodes
     int topoOrder;    // Topological order of the node
-    size_t targetChild; // Target child for equivalence nodes whose children are concat nodes
+    size_t targetChild; // Target child for equivalence nodes whose children are concat nodes (nodeIdx, not idx in childIdx)
+    bool left2right;    // For concat op nodes, whether execute from left to right
 public:
-    AndOrDagNode(): isEq(true), opType(0), topoOrder(-1), targetChild(0) {}
-    AndOrDagNode(bool isEq_, char opType_): isEq(isEq_), opType(opType_), topoOrder(-1), targetChild(0) {}
+    AndOrDagNode(): isEq(true), opType(0), topoOrder(-1), targetChild(0), left2right(true) {}
+    AndOrDagNode(bool isEq_, char opType_): isEq(isEq_), opType(opType_), topoOrder(-1), targetChild(0), left2right(true) {}
     void addChild(size_t c) { childIdx.emplace_back(c); }
     void addParent(size_t c) { parentIdx.emplace_back(c); }
     void setIsEq(bool isEq_) { isEq = isEq_; }
@@ -35,6 +36,9 @@ public:
     void setTopoOrder(int topoOrder_) { topoOrder = topoOrder_; }
     int getTopoOrder() const { return topoOrder; }
     void setTargetChild(size_t targetChild_) { targetChild = targetChild_; }
+    size_t getTargetChild() const { return targetChild; }
+    void setLeft2Right(bool left2right_) { left2right = left2right_; }
+    bool getLeft2Right() const { return left2right; }
 };
 
 class AndOrDag {
@@ -53,24 +57,30 @@ class AndOrDag {
     std::vector<std::shared_ptr<MappedCSR>> res;
 
     // Pointer to statistics
-    std::shared_ptr<const MultiLabelCSR> csrPtr;
+    std::shared_ptr<MultiLabelCSR> csrPtr;
+
+    // Map of materialized query indices to results
+    std::unordered_map<size_t, MappedCSR> matRes;
 
 public:
     AndOrDag(): csrPtr(nullptr) {}
-    AndOrDag(std::shared_ptr<const MultiLabelCSR> csrPtr_): csrPtr(csrPtr_) {}
+    AndOrDag(std::shared_ptr<MultiLabelCSR> csrPtr_): csrPtr(csrPtr_) {}
     void addWorkloadQuery(const std::string &q, size_t freq);   // Add the query q to the dag and mark as workload query
     int addQuery(const std::string &q);   // Add the query q to the dag
     void initAuxiliary();   // Call after finished constructing the dag
     void annotateLeafCostCard(); // Annotate leaf nodes' srcCnt, dstCnt, pairProb, cost
-    float chooseMatViews(char mode, size_t spaceBudget=std::numeric_limits<size_t>::max(), std::string *testOut=nullptr);
+    float chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget=std::numeric_limits<size_t>::max(), std::string *testOut=nullptr);
     void plan();    // Plan the execution of the dag
     void propagateUseCnt(size_t idx); // Propagate useCnt from the current node
     void replanWithMaterialize(const std::vector<size_t> &matIdx, std::unordered_map<size_t, float> &node2cost, float &reducedCost); // Replan the dag assuming the input views are materialized
     void applyChanges(const std::unordered_map<size_t, float> &node2cost);    // Apply the changes from replan to the dag
     void updateNodeCost(size_t nodeIdx, std::unordered_map<size_t, float> &node2cost, float &reducedCost, float updateCost=-1); // Update the cost of a node (and its ancestors); -1 means update to cardinality
     void planNode(size_t nodeIdx);
-    void execute(const std::string &q, std::shared_ptr<MappedCSR> resPtr); // Execute a query with the dag
-    void executeNode(size_t nodeIdx, std::shared_ptr<MappedCSR> resPtr); // Execute a node with the dag
+    void materialize(); // Materialize the chosen views
+    void execute(const std::string &q, QueryResult &qr); // Execute a query with the dag
+    // Execute a node with the dag
+    void executeNode(size_t nodeIdx, QueryResult &qr, const std::unordered_set<size_t> *lCandPtr=nullptr,
+        const std::unordered_set<size_t> *rCandPtr=nullptr);
     void serialize();   // Serialize the dag to a file
     void deserialize(); // Deserialize the dag from a file
 
@@ -106,7 +116,7 @@ public:
     void setDstCnt(size_t idx, size_t dstCnt_) { dstCnt[idx] = dstCnt_; }
     void setPairProb(size_t idx, float pairProb_) { pairProb[idx] = pairProb_; }
     void setCost(size_t idx, float cost_) { cost[idx] = cost_; }
-    void setCsrPtr(std::shared_ptr<const MultiLabelCSR> &csrPtr_) { csrPtr = csrPtr_; }
+    void setCsrPtr(std::shared_ptr<MultiLabelCSR> &csrPtr_) { csrPtr = csrPtr_; }
     std::pair<float, float> getLeftRightWeight(const std::vector<LabelOrInverse> &lEnd, const std::vector<LabelOrInverse> &rStart);
     void addParentChild(size_t p, size_t c) {
         nodes[p].addChild(c);

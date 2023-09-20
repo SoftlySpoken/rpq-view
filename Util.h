@@ -12,11 +12,13 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <chrono>
 #include "string.h"
 #include "antlr4-runtime.h"
 #include "parser/rpqLexer.h"
 #include "parser/rpqParser.h"
 #include "parser/rpqBaseVisitor.h"
+#include "omp.h"
 
 /**
 	Listener for errors during SPARQL query parsing, which throws a 

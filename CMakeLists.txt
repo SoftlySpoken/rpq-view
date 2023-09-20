@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.14)
 project(my_project)
 
 # GoogleTest requires at least C++14
-set(CMAKE_CXX_COMPILER "/usr/local/bin/g++")
-set(CMAKE_C_COMPILER "/usr/local/bin/gcc")
+# set(CMAKE_CXX_COMPILER "/usr/local/bin/g++")
+# set(CMAKE_C_COMPILER "/usr/local/bin/gcc")
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_COMPILER_VERSION "10.1.0")
@@ -17,6 +17,8 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 enable_testing()
+
+find_package(OpenMP REQUIRED)
 
 add_executable(
   AndOrDagTest
@@ -32,14 +34,14 @@ target_include_directories(AndOrDagTest PRIVATE /home/pangyue/gstore/tools/antlr
 target_include_directories(chooseMatViewsTheoCompare PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
 target_link_libraries(
   AndOrDagTest
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a GTest::gtest_main
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a GTest::gtest_main OpenMP::OpenMP_CXX
 )
 target_link_libraries(
   chooseMatViewsTheoCompare
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX
 )
-target_compile_options(AndOrDagTest PRIVATE -g -Wall -DTEST)
-target_compile_options(chooseMatViewsTheoCompare PRIVATE -g -Wall -O2)
+target_compile_options(AndOrDagTest PRIVATE -g -Wall -DTEST $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
+target_compile_options(chooseMatViewsTheoCompare PRIVATE -g -Wall -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
 
 include(GoogleTest)
 gtest_discover_tests(AndOrDagTest)

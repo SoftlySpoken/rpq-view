@@ -2,14 +2,16 @@
 #include "AndOrDag.h"
 using namespace std;
 
-// Custom test case function
-// Output file format:
+// AND-OR DAG file format: (expected output of CustomTest, input of buildAndOrDagFromFile)
 // nodes
 // #nodes
 // each node: isEq opType #children child1 child2 … #startLabel lbl1 inv1 lbl2 inv2 ... #endLabel lbl1 inv1 lbl2 inv2 ...
 // q2idx
 // #q
 // each line: q idx
+// (Below is optional content)
+// #eq nodes that need to specify targetChild
+// each line: idx targetChild
 void CustomTest(const std::string& testName) {
     // Generate input and expected output file names based on the test name
     string dataDir = "../test_data/AddQueryTestSuite/";
@@ -80,7 +82,7 @@ void CustomTest(const std::string& testName) {
     }
 }
 
-void buildAndOrDagFromFile(AndOrDag &aod, const string &inputFileName) {
+void buildAndOrDagFromFile(AndOrDag &aod, const string &inputFileName, bool getTargetChild=false) {
     std::ifstream inputFile(inputFileName);
     ASSERT_EQ(inputFile.is_open(), true);
     size_t numNodes = 0;
@@ -118,8 +120,30 @@ void buildAndOrDagFromFile(AndOrDag &aod, const string &inputFileName) {
         inputFile >> cur >> qIdx;
         aod.getQ2idx()[cur] = qIdx;
     }
+    // Optionally set targetChild
+    if (getTargetChild) {
+        size_t numEq = 0;
+        inputFile >> numEq;
+        size_t curNodeIdx = 0, curTargetChild = 0;
+        for (size_t i = 0; i < numEq; i++) {
+            inputFile >> curNodeIdx >> curTargetChild;
+            aod.getNodes()[curNodeIdx].setTargetChild(curTargetChild);
+        }
+    }
     inputFile.close();
 }
+
+class ExecuteTestSuite : public ::testing::TestWithParam<std::string> {
+protected:
+    std::shared_ptr<MultiLabelCSR> csrPtr;
+    std::string dataDir;
+    ExecuteTestSuite(): csrPtr(nullptr), dataDir("../test_data/ExecuteTestSuite/") {}
+    void SetUp() override {
+        string graphFilePath = dataDir + "graph.txt";
+        csrPtr = make_shared<MultiLabelCSR>();
+        csrPtr->loadGraph(graphFilePath);
+    }
+};
 
 class ChooseMatViewsTestSuite : public ::testing::TestWithParam<vector<size_t>> {
 protected:
@@ -160,8 +184,7 @@ protected:
         }
         statsFile.close();
 
-        shared_ptr<const MultiLabelCSR> csrPtrConst = dynamic_pointer_cast<const MultiLabelCSR>(csrPtr);
-        aod.setCsrPtr(csrPtrConst);
+        aod.setCsrPtr(csrPtr);
         string inputFileName = dataDir + "KleeneIriConcatTest_input.txt";
         buildAndOrDagFromFile(aod, inputFileName);
         aod.initAuxiliary();
@@ -499,11 +522,12 @@ TEST_P(ChooseMatViewsTestSuite, KleeneIriConcatTest) {
     const auto &curParam = GetParam();
     size_t isCopy = curParam[0], curMode = curParam[1], curBudget = curParam[2];
     float retRealBenefit = 0;
+    size_t usedSpace = 0;
     if (isCopy == 0)
-        retRealBenefit = aod.chooseMatViews(curMode, curBudget, &testOutput);
+        retRealBenefit = aod.chooseMatViews(curMode, usedSpace, curBudget, &testOutput);
     else {
         AndOrDag tmpAod(aod);
-        retRealBenefit = tmpAod.chooseMatViews(curMode, curBudget, &testOutput);
+        retRealBenefit = tmpAod.chooseMatViews(curMode, usedSpace, curBudget, &testOutput);
     }
 
     // Compare the actual result with the expected result
@@ -575,3 +599,54 @@ vector<size_t>({1, 2, numeric_limits<size_t>::max()}), vector<size_t>({1, 2, 3})
 vector<size_t>({1, 3, numeric_limits<size_t>::max()}), vector<size_t>({1, 3, 3}),
 vector<size_t>({1, 4, numeric_limits<size_t>::max()}), vector<size_t>({1, 4, 3})
 ));
+
+TEST_P(ExecuteTestSuite, ExecuteTest) {
+    const string &testName = GetParam();
+    AndOrDag aod;
+    aod.setCsrPtr(csrPtr);
+    string inputFileName = dataDir + testName + "_input.txt";
+    if (testName == "ConcatTest")
+        buildAndOrDagFromFile(aod, inputFileName, true);
+    else
+        buildAndOrDagFromFile(aod, inputFileName, false);
+    aod.initAuxiliary();
+    QueryResult qr(nullptr, false);
+    string queryFileName = dataDir + testName + "_query.txt";
+    std::ifstream queryFile(queryFileName);
+    ASSERT_EQ(queryFile.is_open(), true);
+    string q;
+    queryFile >> q;
+    queryFile.close();
+    aod.execute(q, qr);
+
+    // Compare the actual result with the expected result
+    // Expected query result output file format: #nodes
+    // each line: nodeIdx #neighbors neighbor1 neighbor2 ...
+    string expectedOutputFileName = dataDir + testName + "_expected_output.txt";
+    std::ifstream expectedOutputFile(expectedOutputFileName);
+    ASSERT_EQ(expectedOutputFile.is_open(), true);
+    size_t numNodes = 0;
+    expectedOutputFile >> numNodes;
+    ASSERT_EQ(qr.csrPtr->n, numNodes);
+    size_t curNodeIdx = 0, numNeighbors = 0, curNeighbor = 0;
+    AdjInterval aitv;
+    for (size_t i = 0; i < numNodes; i++) {
+        expectedOutputFile >> curNodeIdx >> numNeighbors;
+        ASSERT_EQ(qr.csrPtr->v2idx.find(curNodeIdx) != qr.csrPtr->v2idx.end(), true);
+        qr.csrPtr->getAdjIntervalByVert(curNodeIdx, aitv);
+        ASSERT_EQ(aitv.len, numNeighbors);
+        unordered_set<size_t> realNeighbors;
+        for (size_t j = 0; j < numNeighbors; j++) {
+            expectedOutputFile >> curNeighbor;
+            realNeighbors.emplace(curNeighbor);
+        }
+        for (size_t j = 0; j < numNeighbors; j++)
+            EXPECT_EQ(realNeighbors.find((*aitv.start)[aitv.offset + j]) != realNeighbors.end(), true);
+    }
+    bool realHasEpsilon = false;
+    expectedOutputFile >> realHasEpsilon;
+    EXPECT_EQ(qr.hasEpsilon, realHasEpsilon);
+}
+
+INSTANTIATE_TEST_SUITE_P(ExecuteTestSuiteInstance, ExecuteTestSuite, ::testing::Values("SingleIriTest", "SingleInverseIriTest",
+"AlternationTest", "ConcatTest", "ConcatKleeneTest", "KleeneIriConcatTest", "KleeneStarIriConcatTest", "IriKleeneStarConcat"));

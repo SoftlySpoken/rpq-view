@@ -21,7 +21,7 @@ void MultiLabelCSR::loadGraph(const std::string &filePath, LineSeq lineSeq) {
 
     // First pass: get n, m, numLabel, type2label (map in-file labels to consecutive ints)
     // Get tmpEdgeList in the first pass (no second pass). Assume edges are sorted by SPO
-    unsigned u, v, maxVert = 0;
+    unsigned u, v;
     double type;
     unordered_map<double, size_t> &type2label = this->label2idx;
     std::vector<EdgeNode> tmpEdgeList;
@@ -34,8 +34,8 @@ void MultiLabelCSR::loadGraph(const std::string &filePath, LineSeq lineSeq) {
             readRet = fscanf(f, "%u%lf%u", &u, &type, &v);
         if (readRet == -1)
             break;
-        if (u > maxVert) maxVert = u;
-        if (v > maxVert) maxVert = v;
+        if (u > maxNode) maxNode = u;
+        if (v > maxNode) maxNode = v;
         if (type2label.find(type) == type2label.end()) {
             unsigned nextLabel = (unsigned)type2label.size();
             type2label[type] = nextLabel;
@@ -169,12 +169,17 @@ void MultiLabelCSR::fillStats() {
         stats.inCooccur[i].assign(labelCnt, 0);
     }
 
+    // TODO: too slow on wikidata (each label can have >10^9 starting vertices), need to optimize
+    // Tried iterating the nodes to get all labels associated with each node, then process each edge, but even slower
+    // The following code with omp parallel for takes 40 min on 10^8 lines of wikidata
+    #pragma omp parallel for schedule(dynamic)
     for (size_t y = 0; y < labelCnt; y++) {
         for (const auto &pr : outCsr[y].v2idx) {
-            size_t v = pr.first, idx = pr.second;
+        size_t v = pr.first, idx = pr.second;
             size_t outDeg = idx < outCsr[y].n - 1 ? 
                 outCsr[y].offset[idx + 1] - outCsr[y].offset[idx] :
                 outCsr[y].m - outCsr[y].offset[idx];
+            // #pragma omp parallel for
             for (size_t x = 0; x < labelCnt; x++) {
                 if (inCsr[x].v2idx.find(v) != inCsr[x].v2idx.end()) {
                     size_t inner = inCsr[x].v2idx.at(v);
@@ -195,6 +200,7 @@ void MultiLabelCSR::fillStats() {
         }
         for (const auto &pr : inCsr[y].v2idx) {
             size_t v = pr.first;
+            // #pragma omp parallel for
             for (size_t x = 0; x < labelCnt; x++) {
                 if (y != x && inCsr[x].v2idx.find(v) != inCsr[x].v2idx.end()) {
                     size_t inner = inCsr[x].v2idx.at(v);
