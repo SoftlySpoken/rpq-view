@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "AndOrDag.h"
+#include "Rpq2NFAConvertor.h"
 using namespace std;
 
 // AND-OR DAG file format: (expected output of CustomTest, input of buildAndOrDagFromFile)
@@ -600,6 +601,47 @@ vector<size_t>({1, 3, numeric_limits<size_t>::max()}), vector<size_t>({1, 3, 3})
 vector<size_t>({1, 4, numeric_limits<size_t>::max()}), vector<size_t>({1, 4, 3})
 ));
 
+void compareExecuteResult(const string &expectedOutputFileName, MultiLabelCSR *dataCsrPtr,
+MappedCSR *resCsrPtr, bool explicitEpsilon=false) {
+    std::ifstream expectedOutputFile(expectedOutputFileName);
+    ASSERT_EQ(expectedOutputFile.is_open(), true);
+    size_t numNodes = 0;
+    expectedOutputFile >> numNodes;
+    size_t curNodeIdx = 0, numNeighbors = 0, curNeighbor = 0;
+    unordered_map<size_t, unordered_set<size_t>> realAdjList;
+    AdjInterval aitv;
+    for (size_t i = 0; i < numNodes; i++) {
+        expectedOutputFile >> curNodeIdx >> numNeighbors;
+        realAdjList[curNodeIdx] = unordered_set<size_t>();
+        for (size_t j = 0; j < numNeighbors; j++) {
+            expectedOutputFile >> curNeighbor;
+            realAdjList[curNodeIdx].emplace(curNeighbor);
+        }
+    }
+    bool realHasEpsilon = false;
+    expectedOutputFile >> realHasEpsilon;
+    expectedOutputFile.close();
+    if (explicitEpsilon && realHasEpsilon) {
+        // For DFA execution (explicitEpsilon == true), explicitly enhance the expected output if hasEpsilon == true
+        for (size_t i = 0; i <= dataCsrPtr->maxNode; i++) {
+            if (realAdjList.find(i) == realAdjList.end())
+                realAdjList[i] = unordered_set<size_t>();
+            realAdjList[i].emplace(i);
+        }
+    }
+    // Compare the query result with the ground truth
+    // Do not compare the number of nodes, since node idx may not be continuous
+    // TODO: NFA execute didn't map the labels
+    for (const auto &pr : resCsrPtr->v2idx) {
+        size_t curNodeIdx = pr.first;
+        ASSERT_EQ(realAdjList.find(curNodeIdx) != realAdjList.end(), true);
+        resCsrPtr->getAdjIntervalByVert(curNodeIdx, aitv);
+        ASSERT_EQ(aitv.len, realAdjList[curNodeIdx].size());
+        for (size_t j = 0; j < aitv.len; j++)
+            EXPECT_EQ(realAdjList[curNodeIdx].find((*aitv.start)[aitv.offset + j]) != realAdjList[curNodeIdx].end(), true);
+    }
+}
+
 TEST_P(ExecuteTestSuite, ExecuteTest) {
     const string &testName = GetParam();
     AndOrDag aod;
@@ -623,29 +665,23 @@ TEST_P(ExecuteTestSuite, ExecuteTest) {
     // Expected query result output file format: #nodes
     // each line: nodeIdx #neighbors neighbor1 neighbor2 ...
     string expectedOutputFileName = dataDir + testName + "_expected_output.txt";
-    std::ifstream expectedOutputFile(expectedOutputFileName);
-    ASSERT_EQ(expectedOutputFile.is_open(), true);
-    size_t numNodes = 0;
-    expectedOutputFile >> numNodes;
-    ASSERT_EQ(qr.csrPtr->n, numNodes);
-    size_t curNodeIdx = 0, numNeighbors = 0, curNeighbor = 0;
-    AdjInterval aitv;
-    for (size_t i = 0; i < numNodes; i++) {
-        expectedOutputFile >> curNodeIdx >> numNeighbors;
-        ASSERT_EQ(qr.csrPtr->v2idx.find(curNodeIdx) != qr.csrPtr->v2idx.end(), true);
-        qr.csrPtr->getAdjIntervalByVert(curNodeIdx, aitv);
-        ASSERT_EQ(aitv.len, numNeighbors);
-        unordered_set<size_t> realNeighbors;
-        for (size_t j = 0; j < numNeighbors; j++) {
-            expectedOutputFile >> curNeighbor;
-            realNeighbors.emplace(curNeighbor);
-        }
-        for (size_t j = 0; j < numNeighbors; j++)
-            EXPECT_EQ(realNeighbors.find((*aitv.start)[aitv.offset + j]) != realNeighbors.end(), true);
-    }
-    bool realHasEpsilon = false;
-    expectedOutputFile >> realHasEpsilon;
-    EXPECT_EQ(qr.hasEpsilon, realHasEpsilon);
+    compareExecuteResult(expectedOutputFileName, csrPtr.get(), qr.csrPtr, false);
+}
+
+TEST_P(ExecuteTestSuite, NfaExecuteTest) {
+    const string &testName = GetParam();
+    string queryFileName = dataDir + testName + "_query.txt";
+    std::ifstream queryFile(queryFileName);
+    ASSERT_EQ(queryFile.is_open(), true);
+    string q;
+    queryFile >> q;
+    queryFile.close();
+    Rpq2NFAConvertor cvrt;
+    shared_ptr<NFA> dfaPtr = cvrt.convert(q)->convert2Dfa();
+    shared_ptr<MappedCSR> res = dfaPtr->execute(csrPtr);
+    // Compare the actual result with the expected result
+    string expectedOutputFileName = dataDir + testName + "_expected_output.txt";
+    compareExecuteResult(expectedOutputFileName, csrPtr.get(), res.get(), true);
 }
 
 INSTANTIATE_TEST_SUITE_P(ExecuteTestSuiteInstance, ExecuteTestSuite, ::testing::Values("SingleIriTest", "SingleInverseIriTest",

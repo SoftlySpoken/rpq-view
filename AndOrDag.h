@@ -56,7 +56,6 @@ class AndOrDag {
     // View results
     std::vector<std::shared_ptr<MappedCSR>> res;
 
-    // Pointer to statistics
     std::shared_ptr<MultiLabelCSR> csrPtr;
 
     // Map of materialized query indices to results

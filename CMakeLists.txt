@@ -22,7 +22,7 @@ find_package(OpenMP REQUIRED)
 
 add_executable(
   AndOrDagTest
-  AndOrDagTest.cpp AndOrDag.cpp Util.cpp CSR.cpp
+  AndOrDagTest.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
   parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
 )
 add_executable(
