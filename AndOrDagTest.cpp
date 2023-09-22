@@ -603,6 +603,8 @@ vector<size_t>({1, 4, numeric_limits<size_t>::max()}), vector<size_t>({1, 4, 3})
 
 void compareExecuteResult(const string &expectedOutputFileName, MultiLabelCSR *dataCsrPtr,
 MappedCSR *resCsrPtr, bool explicitEpsilon=false) {
+    // Expected query result output file format: #nodes
+    // each line: nodeIdx #neighbors neighbor1 neighbor2 ...
     std::ifstream expectedOutputFile(expectedOutputFileName);
     ASSERT_EQ(expectedOutputFile.is_open(), true);
     size_t numNodes = 0;
@@ -631,7 +633,6 @@ MappedCSR *resCsrPtr, bool explicitEpsilon=false) {
     }
     // Compare the query result with the ground truth
     // Do not compare the number of nodes, since node idx may not be continuous
-    // TODO: NFA execute didn't map the labels
     for (const auto &pr : resCsrPtr->v2idx) {
         size_t curNodeIdx = pr.first;
         ASSERT_EQ(realAdjList.find(curNodeIdx) != realAdjList.end(), true);
@@ -662,8 +663,6 @@ TEST_P(ExecuteTestSuite, ExecuteTest) {
     aod.execute(q, qr);
 
     // Compare the actual result with the expected result
-    // Expected query result output file format: #nodes
-    // each line: nodeIdx #neighbors neighbor1 neighbor2 ...
     string expectedOutputFileName = dataDir + testName + "_expected_output.txt";
     compareExecuteResult(expectedOutputFileName, csrPtr.get(), qr.csrPtr, false);
 }

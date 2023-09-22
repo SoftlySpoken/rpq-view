@@ -826,7 +826,6 @@ const std::unordered_set<size_t> *rCandPtr) {
             QueryResult qrChild(nullptr, false);
             executeNode(curChildIdx[0], qrChild, lCandPtr, rCandPtr);
             unordered_map<size_t, vector<size_t>> node2Adj;
-            unordered_map<size_t, size_t> curAdjLen;
             // Fix-point
             for (const auto &pr : qrChild.csrPtr->v2idx) {
                 size_t v = pr.first, vIdx = pr.second;
@@ -849,17 +848,15 @@ const std::unordered_set<size_t> *rCandPtr) {
                         }
                     }
                 }
-                if (!exist.empty())
-                    curAdjLen[v] = 0;
             }
-            size_t numNodesAdded = 0;
-            do {
-                numNodesAdded = 0;
-                for (auto &pr : node2Adj) {
-                    size_t v = pr.first, curLen = pr.second.size(), prevLen = curAdjLen[v];
+
+            for (auto &pr : node2Adj) {
+                size_t curLen = 0, prevLen = 0;
+                unordered_set<size_t> exist(pr.second.begin(), pr.second.end());
+                while (true) {
+                    curLen = pr.second.size();
                     if (curLen == prevLen)
-                        continue;
-                    unordered_set<size_t> exist(pr.second.begin(), pr.second.end());
+                        break;
                     for (size_t i = prevLen; i < curLen; i++) {
                         size_t nextNode = pr.second[i];
                         auto it = qrChild.csrPtr->v2idx.find(nextNode);
@@ -872,14 +869,13 @@ const std::unordered_set<size_t> *rCandPtr) {
                                 if (exist.find(nextNextNode) == exist.end()) {
                                     exist.emplace(nextNextNode);
                                     pr.second.emplace_back(nextNextNode);
-                                    numNodesAdded++;
                                 }
                             }
                         }
                     }
-                    curAdjLen[v] = curLen;
+                    prevLen = curLen;
                 }
-            } while (numNodesAdded > 0);
+            }
             qr.csrPtr = new MappedCSR();
             qr.newed = true;
             for (const auto &pr : node2Adj) {

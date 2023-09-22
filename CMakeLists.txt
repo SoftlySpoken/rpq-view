@@ -30,8 +30,14 @@ add_executable(
   chooseMatViewsTheoCompare.cpp AndOrDag.cpp Util.cpp CSR.cpp
   parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
 )
+add_executable(
+  CompareAndOrDagDfa
+  CompareAndOrDagDfa.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
+  parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
+)
 target_include_directories(AndOrDagTest PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
 target_include_directories(chooseMatViewsTheoCompare PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(CompareAndOrDagDfa PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
 target_link_libraries(
   AndOrDagTest
   PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a GTest::gtest_main OpenMP::OpenMP_CXX
@@ -40,8 +46,13 @@ target_link_libraries(
   chooseMatViewsTheoCompare
   PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX
 )
+target_link_libraries(
+  CompareAndOrDagDfa
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX
+)
 target_compile_options(AndOrDagTest PRIVATE -g -Wall -DTEST $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
 target_compile_options(chooseMatViewsTheoCompare PRIVATE -g -Wall -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
+target_compile_options(CompareAndOrDagDfa PRIVATE -g -Wall -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
 
 include(GoogleTest)
 gtest_discover_tests(AndOrDagTest)

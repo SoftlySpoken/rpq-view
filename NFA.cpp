@@ -321,7 +321,10 @@ std::shared_ptr<MappedCSR> NFA::execute(std::shared_ptr<const MultiLabelCSR> csr
         auto it = csrPtr->label2idx.find(initOut.lbl);
         assert(it != csrPtr->label2idx.end());
         size_t lblIdx = it->second;
-        for (const auto &spr : csrPtr->outCsr[lblIdx].v2idx) {
+        const unordered_map<unsigned int, unsigned int> *v2idxPtr = &(csrPtr->outCsr[lblIdx].v2idx);
+        if (!initOut.forward)
+            v2idxPtr = &(csrPtr->inCsr[lblIdx].v2idx);
+        for (const auto &spr : *v2idxPtr) {
             sNode = spr.first;
             if (src.find(sNode) != src.end())
                 continue;
@@ -348,7 +351,7 @@ std::shared_ptr<MappedCSR> NFA::execute(std::shared_ptr<const MultiLabelCSR> csr
                         if (aitv.len > 0) {
                             for (size_t j = 0; j < aitv.len; j++) {
                                 nextV = (*aitv.start)[aitv.offset + j];
-                                if (vis[dst->id][nextV] != sNode) {
+                                if (vis[dst->id][nextV] != int(sNode)) {
                                     // cout << v << ',' << nextV << ',' << dst->id << ' ';
                                     q.push(make_pair(nextV, dst));
                                     vis[dst->id][nextV] = sNode;
@@ -360,7 +363,7 @@ std::shared_ptr<MappedCSR> NFA::execute(std::shared_ptr<const MultiLabelCSR> csr
                         if (aitv.len > 0) {
                             for (size_t j = 0; j < aitv.len; j++) {
                                 nextV = (*aitv.start)[aitv.offset + j];
-                                if (vis[dst->id][nextV] != sNode) {
+                                if (vis[dst->id][nextV] != int(sNode)) {
                                     // cout << v << ',' << nextV << ',' << dst->id << ' ';
                                     q.push(make_pair(nextV, dst));
                                     vis[dst->id][nextV] = sNode;

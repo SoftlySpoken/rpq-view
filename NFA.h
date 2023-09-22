@@ -69,4 +69,11 @@ struct NFA
         initial = addState(true);
         setAccept(initial);
     }
+    ~NFA() {
+        if (vis) {
+            for (unsigned i = 0; i < states.size(); i++)
+                delete []vis[i];
+            delete []vis;
+        }
+    }
 };
