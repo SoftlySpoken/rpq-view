@@ -116,17 +116,14 @@ public:
     const std::vector<size_t> &getSrcCnt() const { return srcCnt; }
     const std::vector<size_t> &getDstCnt() const { return dstCnt; }
     const std::vector<size_t> &getCard() const { return card; }
-    // const std::vector<float> &getPairProb() const { return pairProb; }
     const std::vector<float> &getCost() const { return cost; }
     std::vector<size_t> &getWorkloadFreq() { return workloadFreq; }
     std::vector<size_t> &getUseCnt() { return useCnt; }
     void setSrcCnt(size_t idx, size_t srcCnt_) { srcCnt[idx] = srcCnt_; }
     void setDstCnt(size_t idx, size_t dstCnt_) { dstCnt[idx] = dstCnt_; }
-    // void setPairProb(size_t idx, float pairProb_) { pairProb[idx] = pairProb_; }
     void setCost(size_t idx, float cost_) { cost[idx] = cost_; }
     void setCard(size_t idx, size_t card_) { card[idx] = card_; }
     void setCsrPtr(std::shared_ptr<MultiLabelCSR> &csrPtr_) { csrPtr = csrPtr_; }
-    // std::pair<float, float> getLeftRightWeight(const std::vector<LabelOrInverse> &lEnd, const std::vector<LabelOrInverse> &rStart);
     void addParentChild(size_t p, size_t c) {
         nodes[p].addChild(c);
         nodes[c].addParent(p);

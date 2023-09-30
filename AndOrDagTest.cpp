@@ -155,34 +155,6 @@ protected:
         string graphFilePath = dataDir + "KleeneIriConcatTest_graph.txt";
         csrPtr = make_shared<MultiLabelCSR>();
         csrPtr->loadGraph(graphFilePath);
-        // Do not call fillStats, but directly assign stats
-        // size_t labelCnt = csrPtr->label2idx.size();
-        // csrPtr->stats.outCnt.resize(labelCnt);
-        // csrPtr->stats.inCnt.resize(labelCnt);
-        // csrPtr->stats.outCooccur.resize(labelCnt);
-        // csrPtr->stats.inCooccur.resize(labelCnt);
-        // for (size_t i = 0; i < labelCnt; i++) {
-        //     csrPtr->stats.outCnt[i].assign(labelCnt, 0);
-        //     csrPtr->stats.inCnt[i].assign(labelCnt, 0);
-        //     csrPtr->stats.outCooccur[i].assign(labelCnt, 0);
-        //     csrPtr->stats.inCooccur[i].assign(labelCnt, 0);
-        // }
-        // string statsFileName = dataDir + "KleeneIriConcatTest_stats.txt";
-        // std::ifstream statsFile(statsFileName);
-        // ASSERT_EQ(statsFile.is_open(), true);
-        // size_t outNum = 0, inNum = 0;
-        // size_t x = 0, y = 0, val = 0;
-        // statsFile >> outNum;
-        // for (size_t i = 0; i < outNum; i++) {
-        //     statsFile >> x >> y >> val;
-        //     csrPtr->stats.outCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-        // }
-        // statsFile >> inNum;
-        // for (size_t i = 0; i < inNum; i++) {
-        //     statsFile >> x >> y >> val;
-        //     csrPtr->stats.inCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-        // }
-        // statsFile.close();
 
         aod.setCsrPtr(csrPtr);
         string inputFileName = dataDir + "KleeneIriConcatTest_input.txt";
@@ -305,70 +277,12 @@ TEST(AnnotateLeafCostCardTestSuite, SimpleTest) {
     }
 }
 
-// TEST(StatisticsTestSuite, SimpleTest) {
-//     // Assume CSR loadGraph is correct
-//     string graphFilePath = "../test_data/StatisticsTestSuite/SimpleTest_graph.txt";
-//     MultiLabelCSR mCsr;
-//     mCsr.loadGraph(graphFilePath);
-//     mCsr.fillStats();
-//     size_t numLabel = 0;
-//     string expectedOutputFileName = "../test_data/StatisticsTestSuite/SimpleTest_expected_output.txt";
-//     std::ifstream expectedOutputFile(expectedOutputFileName);
-//     ASSERT_EQ(expectedOutputFile.is_open(), true);
-//     expectedOutputFile >> numLabel;
-//     ASSERT_EQ(mCsr.stats.outCnt.size(), numLabel);
-//     ASSERT_EQ(mCsr.stats.inCnt.size(), numLabel);
-//     ASSERT_EQ(mCsr.stats.outCooccur.size(), numLabel);
-//     ASSERT_EQ(mCsr.stats.inCooccur.size(), numLabel);
-//     size_t curElem = 0;
-//     const std::vector<std::vector<size_t>> * ptr = nullptr;
-//     std::vector<std::vector<size_t>> *ptrArr[] = {&mCsr.stats.outCnt, &mCsr.stats.inCnt, &mCsr.stats.outCooccur, &mCsr.stats.inCooccur};
-//     for (size_t k = 0; k < 4; k++) {
-//         ptr = ptrArr[k];
-//         for (size_t i = 0; i < numLabel; i++) {
-//             ASSERT_EQ((*ptr)[mCsr.label2idx[i]].size(), numLabel);
-//             for (size_t j = 0; j < numLabel; j++) {
-//                 expectedOutputFile >> curElem;
-//                 EXPECT_EQ((*ptr)[mCsr.label2idx[i]][mCsr.label2idx[j]], curElem);
-//             }
-//         }
-//     }
-// }
-
 TEST(PlanTestSuite, KleeneIriConcatTest) {
     // Assume CSR loadGraph is correct
     string dataDir = "../test_data/PlanTestSuite/";
     string graphFilePath = dataDir + "KleeneIriConcatTest_graph.txt";
     auto csrPtr = make_shared<MultiLabelCSR>();
     csrPtr->loadGraph(graphFilePath);
-    // Do not call fillStats, but directly assign stats
-    // size_t labelCnt = csrPtr->label2idx.size();
-    // csrPtr->stats.outCnt.resize(labelCnt);
-    // csrPtr->stats.inCnt.resize(labelCnt);
-    // csrPtr->stats.outCooccur.resize(labelCnt);
-    // csrPtr->stats.inCooccur.resize(labelCnt);
-    // for (size_t i = 0; i < labelCnt; i++) {
-    //     csrPtr->stats.outCnt[i].assign(labelCnt, 0);
-    //     csrPtr->stats.inCnt[i].assign(labelCnt, 0);
-    //     csrPtr->stats.outCooccur[i].assign(labelCnt, 0);
-    //     csrPtr->stats.inCooccur[i].assign(labelCnt, 0);
-    // }
-    // string statsFileName = dataDir + "KleeneIriConcatTest_stats.txt";
-    // std::ifstream statsFile(statsFileName);
-    // ASSERT_EQ(statsFile.is_open(), true);
-    // size_t outNum = 0, inNum = 0;
-    // size_t x = 0, y = 0, val = 0;
-    // statsFile >> outNum;
-    // for (size_t i = 0; i < outNum; i++) {
-    //     statsFile >> x >> y >> val;
-    //     csrPtr->stats.outCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-    // }
-    // statsFile >> inNum;
-    // for (size_t i = 0; i < inNum; i++) {
-    //     statsFile >> x >> y >> val;
-    //     csrPtr->stats.inCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-    // }
-    // statsFile.close();
 
     AndOrDag aod(csrPtr);
     string inputFileName = dataDir + "KleeneIriConcatTest_input.txt";
@@ -426,34 +340,6 @@ TEST(ReplanWithMaterializeTestSuite, KleeneIriConcatTest) {
     string graphFilePath = dataDir + "KleeneIriConcatTest_graph.txt";
     auto csrPtr = make_shared<MultiLabelCSR>();
     csrPtr->loadGraph(graphFilePath);
-    // Do not call fillStats, but directly assign stats
-    // size_t labelCnt = csrPtr->label2idx.size();
-    // csrPtr->stats.outCnt.resize(labelCnt);
-    // csrPtr->stats.inCnt.resize(labelCnt);
-    // csrPtr->stats.outCooccur.resize(labelCnt);
-    // csrPtr->stats.inCooccur.resize(labelCnt);
-    // for (size_t i = 0; i < labelCnt; i++) {
-    //     csrPtr->stats.outCnt[i].assign(labelCnt, 0);
-    //     csrPtr->stats.inCnt[i].assign(labelCnt, 0);
-    //     csrPtr->stats.outCooccur[i].assign(labelCnt, 0);
-    //     csrPtr->stats.inCooccur[i].assign(labelCnt, 0);
-    // }
-    // string statsFileName = dataDir + "KleeneIriConcatTest_stats.txt";
-    // std::ifstream statsFile(statsFileName);
-    // ASSERT_EQ(statsFile.is_open(), true);
-    // size_t outNum = 0, inNum = 0;
-    // size_t x = 0, y = 0, val = 0;
-    // statsFile >> outNum;
-    // for (size_t i = 0; i < outNum; i++) {
-    //     statsFile >> x >> y >> val;
-    //     csrPtr->stats.outCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-    // }
-    // statsFile >> inNum;
-    // for (size_t i = 0; i < inNum; i++) {
-    //     statsFile >> x >> y >> val;
-    //     csrPtr->stats.inCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-    // }
-    // statsFile.close();
 
     AndOrDag aod(csrPtr);
     string inputFileName = dataDir + "KleeneIriConcatTest_input.txt";

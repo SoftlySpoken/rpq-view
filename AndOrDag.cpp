@@ -142,7 +142,6 @@ void AndOrDag::initAuxiliary() {
     cost.assign(numNodes, 0);
     srcCnt.assign(numNodes, 0);
     dstCnt.assign(numNodes, 0);
-    // pairProb.assign(numNodes, 0);
     card.assign(numNodes, 0);
     topoSort();
 }
@@ -164,7 +163,6 @@ void AndOrDag::annotateLeafCostCard() {
             srcCnt[idx] = csrPtr->outCsr[i].n;
             dstCnt[idx] = csrPtr->inCsr[i].n;
             cost[idx] = csrPtr->outCsr[i].m;
-            // pairProb[idx] = float(cost[idx]) / float(srcCnt[idx] * dstCnt[idx]);
             card[idx] = csrPtr->outCsr[i].m;
         }
         it = q2idx.find(invIriStr);
@@ -173,7 +171,6 @@ void AndOrDag::annotateLeafCostCard() {
             srcCnt[idx] = csrPtr->inCsr[i].n;
             dstCnt[idx] = csrPtr->outCsr[i].n;
             cost[idx] = csrPtr->outCsr[i].m;
-            // pairProb[idx] = float(cost[idx]) / float(srcCnt[idx] * dstCnt[idx]);
             card[idx] = csrPtr->outCsr[i].m;
         }
     }
@@ -233,7 +230,6 @@ void AndOrDag::planNode(size_t nodeIdx) {
         cost[nodeIdx] = minCost;
         srcCnt[nodeIdx] = srcCnt[targetChild];
         dstCnt[nodeIdx] = dstCnt[targetChild];
-        // pairProb[nodeIdx] = pairProb[targetChild];
         card[nodeIdx] = card[targetChild];
     } else {
         char curOpType = curNode.getOpType();
@@ -243,15 +239,12 @@ void AndOrDag::planNode(size_t nodeIdx) {
             srcCnt[nodeIdx] = 0;
             dstCnt[nodeIdx] = 0;
             card[nodeIdx] = 0;
-            // size_t curCard = 0;
             for (size_t i = 0; i < numChild; i++) {
                 cost[nodeIdx] += cost[curChildIdx[i]];
                 srcCnt[nodeIdx] += srcCnt[curChildIdx[i]];
                 dstCnt[nodeIdx] += dstCnt[curChildIdx[i]];
-                // curCard += srcCnt[curChildIdx[i]] * dstCnt[curChildIdx[i]] * pairProb[curChildIdx[i]];
                 card[nodeIdx] += card[curChildIdx[i]];
             }
-            // pairProb[nodeIdx] = float(curCard) / float(srcCnt[nodeIdx] * dstCnt[nodeIdx]);
         } else if (curOpType == 1) {
             // Concatenation: preserve the choice of left to right or right to left
             assert(numChild == 2);
@@ -266,32 +259,11 @@ void AndOrDag::planNode(size_t nodeIdx) {
             cost[nodeIdx] = (plan1 < plan2 ? plan1 : plan2) + card[lChild] + card[rChild];
             srcCnt[nodeIdx] = srcCnt[lChild] * middleDivIn;
             dstCnt[nodeIdx] = float(dstCnt[lChild]) * middleDivIn * float(dstCnt[rChild]) / float(srcCnt[rChild]);
-
-            // const auto &lEnd = nodes[lChild].getEndLabel(), &rStart = nodes[rChild].getStartLabel();
-            // pair<float, float> lrW = getLeftRightWeight(lEnd, rStart);
-            // float w1 = lrW.first, w2 = lrW.second;
-            // plan1 = cost2 + w1 * cost1;
-            // plan2 = cost1 + w2 * cost2;
-            // if (plan1 < plan2) {
-            //     curNode.setLeft2Right(false);
-            //     cost[nodeIdx] = plan1;
-            // }
-            // else
-            //     cost[nodeIdx] = plan2;
-            // srcCnt[nodeIdx] = w1 * srcCnt[lChild];
-            // dstCnt[nodeIdx] = w2 * dstCnt[rChild];
-            // float lProb = pairProb[lChild] * w1, rProb = pairProb[rChild] * w2;
-            // pairProb[nodeIdx] = lProb < rProb ? lProb : rProb;
         } else if (curOpType == 2 || curOpType == 3) {
             assert(numChild == 1);
             size_t curChild = curChildIdx[0];
-            // pair<float, float> lrW = getLeftRightWeight(nodes[curChild].getEndLabel(), nodes[curChild].getStartLabel());
-            // float w1 = lrW.first, w2 = lrW.second;
-            // float curW = w2;
-            // cost[nodeIdx] = cost[curChild];
             srcCnt[nodeIdx] = srcCnt[curChild];
             dstCnt[nodeIdx] = dstCnt[curChild];
-            // size_t curCard = srcCnt[curChild] * dstCnt[curChild] * pairProb[curChild];
             float middleDivIn = approxMiddleDivInMonteCarlo(nodes[curChild].getEndLabel(), curChild);
             float c = middleDivIn * card[curChild] / srcCnt[curChild];
             size_t d = 1;
@@ -323,63 +295,17 @@ void AndOrDag::planNode(size_t nodeIdx) {
                 }
                 cost[nodeIdx] += cost[curChild] + (d - 1 + coeff) * card[curChild];
             }
-
-            // float curPairProb = pairProb[curChild];
-            // size_t curSrcCnt = srcCnt[curChild], curDstCnt = dstCnt[curChild];
-            // do {
-            //     cost[nodeIdx] += curW * cost[curChild];
-            //     curSrcCnt *= w1;
-            //     curDstCnt *= w2;
-            //     curPairProb = w1 < w2 ? w1 * curPairProb : w2 * curPairProb;
-            //     curCard += curSrcCnt * curDstCnt * curPairProb;
-            //     srcCnt[nodeIdx] += curSrcCnt;
-            //     dstCnt[nodeIdx] += curDstCnt;
-            //     curW *= w2;
-            // } while (curW >= 0.01 && curSrcCnt + curDstCnt > 0);
-            // pairProb[nodeIdx] = float(curCard) / float(srcCnt[nodeIdx] * dstCnt[nodeIdx]);
         } else if (curOpType == 4) {
             // ?
             assert(numChild == 1);
             cost[nodeIdx] = cost[curChildIdx[0]];
             srcCnt[nodeIdx] = srcCnt[curChildIdx[0]];
             dstCnt[nodeIdx] = dstCnt[curChildIdx[0]];
-            // pairProb[nodeIdx] = pairProb[curChildIdx[0]];
             cost[nodeIdx] = cost[curChildIdx[0]];
         }
     }
 }
 
-// std::pair<float, float> AndOrDag::getLeftRightWeight(const std::vector<LabelOrInverse> &lEnd, const std::vector<LabelOrInverse> &rStart) {
-//     float w1 = 0, w2 = 0;
-//     for (const auto &le : lEnd) {
-//         auto it = csrPtr->label2idx.find(le.lbl);
-//         assert(it != csrPtr->label2idx.end());
-//         size_t lIdx = it->second;
-//         size_t lTotal = csrPtr->outCsr[lIdx].m;
-//         float w1_local = 0;
-//         for (const auto &rs : rStart) {
-//             it = csrPtr->label2idx.find(rs.lbl);
-//             assert(it != csrPtr->label2idx.end());
-//             size_t rIdx = it->second;
-//             size_t rTotal = csrPtr->outCsr[rIdx].m;
-//             if (!le.inv && !rs.inv) {
-//                 w1_local += csrPtr->stats.outCnt[lIdx][rIdx];
-//                 w2 += float(csrPtr->stats.inCnt[rIdx][lIdx]) / float(rTotal);
-//             } else if (!le.inv && rs.inv) {
-//                 w1_local += csrPtr->stats.inCnt[lIdx][rIdx];
-//                 w2 += float(csrPtr->stats.inCooccur[rIdx][lIdx]) / float(rTotal);
-//             } else if (le.inv && !rs.inv) {
-//                 w1_local += csrPtr->stats.outCooccur[lIdx][rIdx];
-//                 w2 += float(csrPtr->stats.outCooccur[rIdx][lIdx]) / float(rTotal);
-//             } else {
-//                 w1_local += csrPtr->stats.inCnt[lIdx][rIdx];
-//                 w2 += float(csrPtr->stats.outCnt[rIdx][lIdx]) / float(rTotal);
-//             }
-//         }
-//         w1 += w1_local / float(lTotal);
-//     }
-//     return make_pair(w1, w2);
-// }
 
 void AndOrDag::topoSort() {
     // Maintain #parents of each node, take those with 0 as sorted, subtract 1 from its children's number
@@ -444,7 +370,6 @@ void AndOrDag::applyChanges(const std::unordered_map<size_t, float> &node2cost) 
 // Do not update srcCnt, dstCnt, card
 void AndOrDag::updateNodeCost(size_t nodeIdx, std::unordered_map<size_t, float> &node2cost,
 float &reducedCost, float updateCost) {
-    // float realUpdateCost = updateCost < 0 ? float(srcCnt[nodeIdx] * dstCnt[nodeIdx]) * pairProb[nodeIdx] : updateCost;
     float realUpdateCost = updateCost < 0 ? card[nodeIdx] : updateCost;
     float prevCost = node2cost.find(nodeIdx) == node2cost.end() ? cost[nodeIdx] : node2cost[nodeIdx];
     if (realUpdateCost >= prevCost)
@@ -491,12 +416,6 @@ float &reducedCost, float updateCost) {
                 plan1 = cost1 + cost2 * joinSetSz / srcCnt[rChild];
                 plan2 = cost2 + cost1 * middleDivIn;
                 parentUpdateCost = (plan1 < plan2 ? plan1 : plan2) + card[lChild] + card[rChild];
-                // const auto &lEnd = nodes[lChild].getEndLabel(), &rStart = nodes[rChild].getStartLabel();
-                // pair<float, float> lrW = getLeftRightWeight(lEnd, rStart);
-                // float w1 = lrW.first, w2 = lrW.second;
-                // plan1 = cost2 + w1 * cost1;
-                // plan2 = cost1 + w2 * cost2;
-                // parentUpdateCost = plan1 < plan2 ? plan1 : plan2;
                 updateNodeCost(parentIdx, node2cost, reducedCost, parentUpdateCost);
             } else if (parentOpType == 2 || parentOpType == 3) {
                 if (realUpdateCost >= card[nodeIdx])
@@ -531,17 +450,6 @@ float &reducedCost, float updateCost) {
                         }
                         parentUpdateCost += realUpdateCost + (d - 1 + coeff) * card[nodeIdx];
                     }
-                    // pair<float, float> lrW = getLeftRightWeight(nodes[nodeIdx].getEndLabel(), nodes[nodeIdx].getStartLabel());
-                    // float w1 = lrW.first, w2 = lrW.second;
-                    // float curW = w2;
-                    // parentUpdateCost = realUpdateCost;
-                    // size_t curSrcCnt = srcCnt[nodeIdx], curDstCnt = dstCnt[nodeIdx];
-                    // do {
-                    //     parentUpdateCost += curW * realUpdateCost;
-                    //     curSrcCnt *= w1;
-                    //     curDstCnt *= w2;
-                    //     curW *= w2;
-                    // } while (curW >= 0.01 && curSrcCnt + curDstCnt > 0);
                     updateNodeCost(parentIdx, node2cost, reducedCost, parentUpdateCost);
                 }
             }
@@ -566,7 +474,6 @@ float AndOrDag::chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget,
         size_t numNodes = nodes.size();
         for (size_t i = 0; i < numNodes; i++) {
             if (nodes[i].getIsEq() && !nodes[i].getChildIdx().empty()) {
-                // float benefit = (cost[i] - float(srcCnt[i] * dstCnt[i]) * pairProb[i]) * float(useCnt[i]);
                 float benefit = (cost[i] - card[i]) * float(useCnt[i]);
                 pq.emplace(i, benefit);
             }
@@ -618,7 +525,6 @@ float AndOrDag::chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget,
                 if (testOut)
                     *testOut += "0 0 ";
                 #endif
-                // addSpace = float(srcCnt[curIdx] * dstCnt[curIdx]) * pairProb[curIdx];
                 addSpace = card[curIdx];
                 if (usedSpace + addSpace > spaceBudget)
                     continue;   // Continue to try other candidates
@@ -640,14 +546,12 @@ float AndOrDag::chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget,
                 else if (mode == 2)
                     pq.emplace(i, useCnt[i]);
                 else if (mode == 3)
-                    // pq.emplace(i, float(useCnt[i]) * (cost[i] - float(srcCnt[i] * dstCnt[i]) * pairProb[i]));
                     pq.emplace(i, float(useCnt[i]) * (cost[i] - card[i]));
                 else {
                     const auto &curChildIdx = nodes[i].getChildIdx();
                     if (curChildIdx.size() == 1) {
                         char curOpType = nodes[curChildIdx[0]].getOpType();
                         if (curOpType == 2 || curOpType == 3)
-                            // pq.emplace(i, float(useCnt[i]) * (cost[i] - float(srcCnt[i] * dstCnt[i]) * pairProb[i]));
                             pq.emplace(i, float(useCnt[i]) * (cost[i] - card[i]));
                     }
                 }
@@ -663,7 +567,6 @@ float AndOrDag::chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget,
             if (testOut)
                 *testOut += to_string(curIdx) + " ";
             #endif
-            // addSpace = float(srcCnt[curIdx] * dstCnt[curIdx]) * pairProb[curIdx];
             addSpace = card[curIdx];
             if (usedSpace + addSpace > spaceBudget) {
                 #ifdef TEST
@@ -788,12 +691,8 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
                 }
             }
             
-        } else if (curChildIdx.size() == 1) {
+        } else if (curChildIdx.size() == 1)
             executeNode(curChildIdx[0], qr, lCandPtr, rCandPtr, nlcResPtr);
-            // size_t curChildOp = nodes[curChildIdx[0]].getOpType();
-            // if (curChildOp == 2 || curChildOp == 4)
-            //     qr.hasEpsilon = true;   // Propagate epsilon upwards (* and ?)
-        }
         else
             executeNode(curNode.getTargetChild(), qr, lCandPtr, rCandPtr, nlcResPtr);
     } else {
@@ -808,14 +707,6 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
             qr.assignAsUnion(childRes);
             // Epsilon propagation & delete child result
             for (size_t i = 0; i < numChild; i++) {
-                // if (!qr.hasEpsilon) {
-                //     const auto &curGrandchildIdx = nodes[curChildIdx[i]].getChildIdx();
-                //     if (curGrandchildIdx.size() == 1) {
-                //         char tmpOpType = nodes[curGrandchildIdx[0]].getOpType();
-                //         if (tmpOpType == 2 || tmpOpType == 4)
-                //             qr.hasEpsilon = true;   // Propagate epsilon upwards (* and ?)
-                //     }
-                // }
                 if (childRes[i].newed)
                     delete childRes[i].csrPtr;
             }

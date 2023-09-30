@@ -58,11 +58,9 @@ struct Statistics {
 struct MultiLabelCSR {
     std::vector<MappedCSR> outCsr, inCsr;
     std::unordered_map<double, size_t> label2idx;
-    // Statistics stats;
     unsigned maxNode;   // The maximum node id
     MultiLabelCSR(): maxNode(0) {}
     void loadGraph(const std::string &filePath, LineSeq lineSeq=sop);
-    // void fillStats();
 };
 
 struct QueryResult {
