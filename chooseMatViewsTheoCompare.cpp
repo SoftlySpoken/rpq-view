@@ -34,7 +34,7 @@ int main() {
         lseq = spo;
     csrPtr->loadGraph(graphFilePath, lseq);
     auto start_time = std::chrono::steady_clock::now();
-    csrPtr->fillStats();
+    // csrPtr->fillStats();
     auto end_time = std::chrono::steady_clock::now();
     std::chrono::microseconds elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     std::cout << "Elapsed time: " << elapsed_microseconds.count() / 1000000.0 << " seconds" << std::endl;

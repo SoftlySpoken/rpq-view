@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include "AndOrDag.h"
-#include "Rpq2NFAConvertor.h"
 using namespace std;
 
 // AND-OR DAG file format: (expected output of CustomTest, input of buildAndOrDagFromFile)
@@ -157,33 +156,33 @@ protected:
         csrPtr = make_shared<MultiLabelCSR>();
         csrPtr->loadGraph(graphFilePath);
         // Do not call fillStats, but directly assign stats
-        size_t labelCnt = csrPtr->label2idx.size();
-        csrPtr->stats.outCnt.resize(labelCnt);
-        csrPtr->stats.inCnt.resize(labelCnt);
-        csrPtr->stats.outCooccur.resize(labelCnt);
-        csrPtr->stats.inCooccur.resize(labelCnt);
-        for (size_t i = 0; i < labelCnt; i++) {
-            csrPtr->stats.outCnt[i].assign(labelCnt, 0);
-            csrPtr->stats.inCnt[i].assign(labelCnt, 0);
-            csrPtr->stats.outCooccur[i].assign(labelCnt, 0);
-            csrPtr->stats.inCooccur[i].assign(labelCnt, 0);
-        }
-        string statsFileName = dataDir + "KleeneIriConcatTest_stats.txt";
-        std::ifstream statsFile(statsFileName);
-        ASSERT_EQ(statsFile.is_open(), true);
-        size_t outNum = 0, inNum = 0;
-        size_t x = 0, y = 0, val = 0;
-        statsFile >> outNum;
-        for (size_t i = 0; i < outNum; i++) {
-            statsFile >> x >> y >> val;
-            csrPtr->stats.outCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-        }
-        statsFile >> inNum;
-        for (size_t i = 0; i < inNum; i++) {
-            statsFile >> x >> y >> val;
-            csrPtr->stats.inCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-        }
-        statsFile.close();
+        // size_t labelCnt = csrPtr->label2idx.size();
+        // csrPtr->stats.outCnt.resize(labelCnt);
+        // csrPtr->stats.inCnt.resize(labelCnt);
+        // csrPtr->stats.outCooccur.resize(labelCnt);
+        // csrPtr->stats.inCooccur.resize(labelCnt);
+        // for (size_t i = 0; i < labelCnt; i++) {
+        //     csrPtr->stats.outCnt[i].assign(labelCnt, 0);
+        //     csrPtr->stats.inCnt[i].assign(labelCnt, 0);
+        //     csrPtr->stats.outCooccur[i].assign(labelCnt, 0);
+        //     csrPtr->stats.inCooccur[i].assign(labelCnt, 0);
+        // }
+        // string statsFileName = dataDir + "KleeneIriConcatTest_stats.txt";
+        // std::ifstream statsFile(statsFileName);
+        // ASSERT_EQ(statsFile.is_open(), true);
+        // size_t outNum = 0, inNum = 0;
+        // size_t x = 0, y = 0, val = 0;
+        // statsFile >> outNum;
+        // for (size_t i = 0; i < outNum; i++) {
+        //     statsFile >> x >> y >> val;
+        //     csrPtr->stats.outCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
+        // }
+        // statsFile >> inNum;
+        // for (size_t i = 0; i < inNum; i++) {
+        //     statsFile >> x >> y >> val;
+        //     csrPtr->stats.inCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
+        // }
+        // statsFile.close();
 
         aod.setCsrPtr(csrPtr);
         string inputFileName = dataDir + "KleeneIriConcatTest_input.txt";
@@ -195,14 +194,14 @@ protected:
         ASSERT_EQ(costFile.is_open(), true);
         size_t numLines = 0;
         costFile >> numLines;
-        size_t curSrcCnt = 0, curDstCnt = 0;
-        float curCost = 0, curPairProb = 0;
+        size_t curSrcCnt = 0, curDstCnt = 0, curCard = 0;
+        float curCost = 0;
         for (size_t i = 0; i < numLines; i++) {
-            costFile >> curCost >> curSrcCnt >> curDstCnt >> curPairProb;
+            costFile >> curCost >> curSrcCnt >> curDstCnt >> curCard;
             aod.setCost(i, curCost);
             aod.setSrcCnt(i, curSrcCnt);
             aod.setDstCnt(i, curDstCnt);
-            aod.setPairProb(i, curPairProb);
+            aod.setCard(i, curCard);
         }
         costFile.close();
         string queryFileName = dataDir + "KleeneIriConcatTest_query2freq.txt";
@@ -294,47 +293,47 @@ TEST(AnnotateLeafCostCardTestSuite, SimpleTest) {
     ASSERT_EQ(expectedOutputFile.is_open(), true);
     size_t numLeafNodes = 0, nodeIdx = 0;
     expectedOutputFile >> numLeafNodes;
-    size_t curSrcCnt = 0, curDstCnt = 0;
-    float curPairProb = 0, curCost = 0;
+    size_t curSrcCnt = 0, curDstCnt = 0, curCard = 0;
+    float curCost = 0;
     for (size_t i = 0; i < numLeafNodes; i++) {
-        expectedOutputFile >> nodeIdx >> curSrcCnt >> curDstCnt >> curPairProb >> curCost;
+        expectedOutputFile >> nodeIdx >> curSrcCnt >> curDstCnt >> curCard >> curCost;
         ASSERT_EQ(aod.getNumNodes() > nodeIdx, true);
         EXPECT_EQ(aod.getSrcCnt()[nodeIdx], curSrcCnt);
         EXPECT_EQ(aod.getDstCnt()[nodeIdx], curDstCnt);
-        EXPECT_FLOAT_EQ(aod.getPairProb()[nodeIdx], curPairProb);
+        EXPECT_EQ(aod.getCard()[nodeIdx], curCard);
         EXPECT_FLOAT_EQ(aod.getCost()[nodeIdx], curCost);
     }
 }
 
-TEST(StatisticsTestSuite, SimpleTest) {
-    // Assume CSR loadGraph is correct
-    string graphFilePath = "../test_data/StatisticsTestSuite/SimpleTest_graph.txt";
-    MultiLabelCSR mCsr;
-    mCsr.loadGraph(graphFilePath);
-    mCsr.fillStats();
-    size_t numLabel = 0;
-    string expectedOutputFileName = "../test_data/StatisticsTestSuite/SimpleTest_expected_output.txt";
-    std::ifstream expectedOutputFile(expectedOutputFileName);
-    ASSERT_EQ(expectedOutputFile.is_open(), true);
-    expectedOutputFile >> numLabel;
-    ASSERT_EQ(mCsr.stats.outCnt.size(), numLabel);
-    ASSERT_EQ(mCsr.stats.inCnt.size(), numLabel);
-    ASSERT_EQ(mCsr.stats.outCooccur.size(), numLabel);
-    ASSERT_EQ(mCsr.stats.inCooccur.size(), numLabel);
-    size_t curElem = 0;
-    const std::vector<std::vector<size_t>> * ptr = nullptr;
-    std::vector<std::vector<size_t>> *ptrArr[] = {&mCsr.stats.outCnt, &mCsr.stats.inCnt, &mCsr.stats.outCooccur, &mCsr.stats.inCooccur};
-    for (size_t k = 0; k < 4; k++) {
-        ptr = ptrArr[k];
-        for (size_t i = 0; i < numLabel; i++) {
-            ASSERT_EQ((*ptr)[mCsr.label2idx[i]].size(), numLabel);
-            for (size_t j = 0; j < numLabel; j++) {
-                expectedOutputFile >> curElem;
-                EXPECT_EQ((*ptr)[mCsr.label2idx[i]][mCsr.label2idx[j]], curElem);
-            }
-        }
-    }
-}
+// TEST(StatisticsTestSuite, SimpleTest) {
+//     // Assume CSR loadGraph is correct
+//     string graphFilePath = "../test_data/StatisticsTestSuite/SimpleTest_graph.txt";
+//     MultiLabelCSR mCsr;
+//     mCsr.loadGraph(graphFilePath);
+//     mCsr.fillStats();
+//     size_t numLabel = 0;
+//     string expectedOutputFileName = "../test_data/StatisticsTestSuite/SimpleTest_expected_output.txt";
+//     std::ifstream expectedOutputFile(expectedOutputFileName);
+//     ASSERT_EQ(expectedOutputFile.is_open(), true);
+//     expectedOutputFile >> numLabel;
+//     ASSERT_EQ(mCsr.stats.outCnt.size(), numLabel);
+//     ASSERT_EQ(mCsr.stats.inCnt.size(), numLabel);
+//     ASSERT_EQ(mCsr.stats.outCooccur.size(), numLabel);
+//     ASSERT_EQ(mCsr.stats.inCooccur.size(), numLabel);
+//     size_t curElem = 0;
+//     const std::vector<std::vector<size_t>> * ptr = nullptr;
+//     std::vector<std::vector<size_t>> *ptrArr[] = {&mCsr.stats.outCnt, &mCsr.stats.inCnt, &mCsr.stats.outCooccur, &mCsr.stats.inCooccur};
+//     for (size_t k = 0; k < 4; k++) {
+//         ptr = ptrArr[k];
+//         for (size_t i = 0; i < numLabel; i++) {
+//             ASSERT_EQ((*ptr)[mCsr.label2idx[i]].size(), numLabel);
+//             for (size_t j = 0; j < numLabel; j++) {
+//                 expectedOutputFile >> curElem;
+//                 EXPECT_EQ((*ptr)[mCsr.label2idx[i]][mCsr.label2idx[j]], curElem);
+//             }
+//         }
+//     }
+// }
 
 TEST(PlanTestSuite, KleeneIriConcatTest) {
     // Assume CSR loadGraph is correct
@@ -343,33 +342,33 @@ TEST(PlanTestSuite, KleeneIriConcatTest) {
     auto csrPtr = make_shared<MultiLabelCSR>();
     csrPtr->loadGraph(graphFilePath);
     // Do not call fillStats, but directly assign stats
-    size_t labelCnt = csrPtr->label2idx.size();
-    csrPtr->stats.outCnt.resize(labelCnt);
-    csrPtr->stats.inCnt.resize(labelCnt);
-    csrPtr->stats.outCooccur.resize(labelCnt);
-    csrPtr->stats.inCooccur.resize(labelCnt);
-    for (size_t i = 0; i < labelCnt; i++) {
-        csrPtr->stats.outCnt[i].assign(labelCnt, 0);
-        csrPtr->stats.inCnt[i].assign(labelCnt, 0);
-        csrPtr->stats.outCooccur[i].assign(labelCnt, 0);
-        csrPtr->stats.inCooccur[i].assign(labelCnt, 0);
-    }
-    string statsFileName = dataDir + "KleeneIriConcatTest_stats.txt";
-    std::ifstream statsFile(statsFileName);
-    ASSERT_EQ(statsFile.is_open(), true);
-    size_t outNum = 0, inNum = 0;
-    size_t x = 0, y = 0, val = 0;
-    statsFile >> outNum;
-    for (size_t i = 0; i < outNum; i++) {
-        statsFile >> x >> y >> val;
-        csrPtr->stats.outCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-    }
-    statsFile >> inNum;
-    for (size_t i = 0; i < inNum; i++) {
-        statsFile >> x >> y >> val;
-        csrPtr->stats.inCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-    }
-    statsFile.close();
+    // size_t labelCnt = csrPtr->label2idx.size();
+    // csrPtr->stats.outCnt.resize(labelCnt);
+    // csrPtr->stats.inCnt.resize(labelCnt);
+    // csrPtr->stats.outCooccur.resize(labelCnt);
+    // csrPtr->stats.inCooccur.resize(labelCnt);
+    // for (size_t i = 0; i < labelCnt; i++) {
+    //     csrPtr->stats.outCnt[i].assign(labelCnt, 0);
+    //     csrPtr->stats.inCnt[i].assign(labelCnt, 0);
+    //     csrPtr->stats.outCooccur[i].assign(labelCnt, 0);
+    //     csrPtr->stats.inCooccur[i].assign(labelCnt, 0);
+    // }
+    // string statsFileName = dataDir + "KleeneIriConcatTest_stats.txt";
+    // std::ifstream statsFile(statsFileName);
+    // ASSERT_EQ(statsFile.is_open(), true);
+    // size_t outNum = 0, inNum = 0;
+    // size_t x = 0, y = 0, val = 0;
+    // statsFile >> outNum;
+    // for (size_t i = 0; i < outNum; i++) {
+    //     statsFile >> x >> y >> val;
+    //     csrPtr->stats.outCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
+    // }
+    // statsFile >> inNum;
+    // for (size_t i = 0; i < inNum; i++) {
+    //     statsFile >> x >> y >> val;
+    //     csrPtr->stats.inCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
+    // }
+    // statsFile.close();
 
     AndOrDag aod(csrPtr);
     string inputFileName = dataDir + "KleeneIriConcatTest_input.txt";
@@ -393,15 +392,15 @@ TEST(PlanTestSuite, KleeneIriConcatTest) {
     expectedOutputFile >> numLines;
     const auto &cost = aod.getCost();
     const auto &srcCnt = aod.getSrcCnt(), &dstCnt = aod.getDstCnt();
-    const auto &pairProb = aod.getPairProb();
-    size_t curSrcCnt = 0, curDstCnt = 0;
-    float curCost = 0, curPairProb = 0;
+    const auto &card = aod.getCard();
+    size_t curSrcCnt = 0, curDstCnt = 0, curCard = 0;
+    float curCost = 0;
     for (size_t i = 0; i < numLines; i++) {
-        expectedOutputFile >> curCost >> curSrcCnt >> curDstCnt >> curPairProb;
+        expectedOutputFile >> curCost >> curSrcCnt >> curDstCnt >> curCard;
         EXPECT_FLOAT_EQ(cost[i], curCost);
         EXPECT_EQ(srcCnt[i], curSrcCnt);
         EXPECT_EQ(dstCnt[i], curDstCnt);
-        EXPECT_FLOAT_EQ(pairProb[i], curPairProb);
+        EXPECT_EQ(card[i], curCard);
     }
 }
 
@@ -428,33 +427,33 @@ TEST(ReplanWithMaterializeTestSuite, KleeneIriConcatTest) {
     auto csrPtr = make_shared<MultiLabelCSR>();
     csrPtr->loadGraph(graphFilePath);
     // Do not call fillStats, but directly assign stats
-    size_t labelCnt = csrPtr->label2idx.size();
-    csrPtr->stats.outCnt.resize(labelCnt);
-    csrPtr->stats.inCnt.resize(labelCnt);
-    csrPtr->stats.outCooccur.resize(labelCnt);
-    csrPtr->stats.inCooccur.resize(labelCnt);
-    for (size_t i = 0; i < labelCnt; i++) {
-        csrPtr->stats.outCnt[i].assign(labelCnt, 0);
-        csrPtr->stats.inCnt[i].assign(labelCnt, 0);
-        csrPtr->stats.outCooccur[i].assign(labelCnt, 0);
-        csrPtr->stats.inCooccur[i].assign(labelCnt, 0);
-    }
-    string statsFileName = dataDir + "KleeneIriConcatTest_stats.txt";
-    std::ifstream statsFile(statsFileName);
-    ASSERT_EQ(statsFile.is_open(), true);
-    size_t outNum = 0, inNum = 0;
-    size_t x = 0, y = 0, val = 0;
-    statsFile >> outNum;
-    for (size_t i = 0; i < outNum; i++) {
-        statsFile >> x >> y >> val;
-        csrPtr->stats.outCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-    }
-    statsFile >> inNum;
-    for (size_t i = 0; i < inNum; i++) {
-        statsFile >> x >> y >> val;
-        csrPtr->stats.inCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
-    }
-    statsFile.close();
+    // size_t labelCnt = csrPtr->label2idx.size();
+    // csrPtr->stats.outCnt.resize(labelCnt);
+    // csrPtr->stats.inCnt.resize(labelCnt);
+    // csrPtr->stats.outCooccur.resize(labelCnt);
+    // csrPtr->stats.inCooccur.resize(labelCnt);
+    // for (size_t i = 0; i < labelCnt; i++) {
+    //     csrPtr->stats.outCnt[i].assign(labelCnt, 0);
+    //     csrPtr->stats.inCnt[i].assign(labelCnt, 0);
+    //     csrPtr->stats.outCooccur[i].assign(labelCnt, 0);
+    //     csrPtr->stats.inCooccur[i].assign(labelCnt, 0);
+    // }
+    // string statsFileName = dataDir + "KleeneIriConcatTest_stats.txt";
+    // std::ifstream statsFile(statsFileName);
+    // ASSERT_EQ(statsFile.is_open(), true);
+    // size_t outNum = 0, inNum = 0;
+    // size_t x = 0, y = 0, val = 0;
+    // statsFile >> outNum;
+    // for (size_t i = 0; i < outNum; i++) {
+    //     statsFile >> x >> y >> val;
+    //     csrPtr->stats.outCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
+    // }
+    // statsFile >> inNum;
+    // for (size_t i = 0; i < inNum; i++) {
+    //     statsFile >> x >> y >> val;
+    //     csrPtr->stats.inCnt[csrPtr->label2idx[x]][csrPtr->label2idx[y]] = val;
+    // }
+    // statsFile.close();
 
     AndOrDag aod(csrPtr);
     string inputFileName = dataDir + "KleeneIriConcatTest_input.txt";
@@ -466,14 +465,14 @@ TEST(ReplanWithMaterializeTestSuite, KleeneIriConcatTest) {
     ASSERT_EQ(costFile.is_open(), true);
     size_t numLines = 0;
     costFile >> numLines;
-    size_t curSrcCnt = 0, curDstCnt = 0;
-    float curCost = 0, curPairProb = 0;
+    size_t curSrcCnt = 0, curDstCnt = 0, curCard = 0;
+    float curCost = 0;
     for (size_t i = 0; i < numLines; i++) {
-        costFile >> curCost >> curSrcCnt >> curDstCnt >> curPairProb;
+        costFile >> curCost >> curSrcCnt >> curDstCnt >> curCard;
         aod.setCost(i, curCost);
         aod.setSrcCnt(i, curSrcCnt);
         aod.setDstCnt(i, curDstCnt);
-        aod.setPairProb(i, curPairProb);
+        aod.setCard(i, curCard);
     }
     costFile.close();
     string queryFileName = dataDir + "KleeneIriConcatTest_query.txt";
@@ -589,16 +588,16 @@ TEST_P(ChooseMatViewsTestSuite, KleeneIriConcatTest) {
 }
 
 INSTANTIATE_TEST_SUITE_P(ChooseMatViewsTestSuiteInstance, ChooseMatViewsTestSuite,
-::testing::Values(vector<size_t>({0, 0, numeric_limits<size_t>::max()}), vector<size_t>({0, 0, 3}),
-vector<size_t>({0, 1, numeric_limits<size_t>::max()}), vector<size_t>({0, 1, 3}),
-vector<size_t>({0, 2, numeric_limits<size_t>::max()}), vector<size_t>({0, 2, 3}),
-vector<size_t>({0, 3, numeric_limits<size_t>::max()}), vector<size_t>({0, 3, 3}),
-vector<size_t>({0, 4, numeric_limits<size_t>::max()}), vector<size_t>({0, 4, 3}),
-vector<size_t>({1, 0, numeric_limits<size_t>::max()}), vector<size_t>({1, 0, 3}),
-vector<size_t>({1, 1, numeric_limits<size_t>::max()}), vector<size_t>({1, 1, 3}),
-vector<size_t>({1, 2, numeric_limits<size_t>::max()}), vector<size_t>({1, 2, 3}),
-vector<size_t>({1, 3, numeric_limits<size_t>::max()}), vector<size_t>({1, 3, 3}),
-vector<size_t>({1, 4, numeric_limits<size_t>::max()}), vector<size_t>({1, 4, 3})
+::testing::Values(vector<size_t>({0, 0, numeric_limits<size_t>::max()}), vector<size_t>({0, 0, 4}),
+vector<size_t>({0, 1, numeric_limits<size_t>::max()}), vector<size_t>({0, 1, 4}),
+vector<size_t>({0, 2, numeric_limits<size_t>::max()}), vector<size_t>({0, 2, 4}),
+vector<size_t>({0, 3, numeric_limits<size_t>::max()}), vector<size_t>({0, 3, 4}),
+vector<size_t>({0, 4, numeric_limits<size_t>::max()}), vector<size_t>({0, 4, 4}),
+vector<size_t>({1, 0, numeric_limits<size_t>::max()}), vector<size_t>({1, 0, 4}),
+vector<size_t>({1, 1, numeric_limits<size_t>::max()}), vector<size_t>({1, 1, 4}),
+vector<size_t>({1, 2, numeric_limits<size_t>::max()}), vector<size_t>({1, 2, 4}),
+vector<size_t>({1, 3, numeric_limits<size_t>::max()}), vector<size_t>({1, 3, 4}),
+vector<size_t>({1, 4, numeric_limits<size_t>::max()}), vector<size_t>({1, 4, 4})
 ));
 
 void compareExecuteResult(const string &expectedOutputFileName, MultiLabelCSR *dataCsrPtr,
@@ -685,3 +684,5 @@ TEST_P(ExecuteTestSuite, NfaExecuteTest) {
 
 INSTANTIATE_TEST_SUITE_P(ExecuteTestSuiteInstance, ExecuteTestSuite, ::testing::Values("SingleIriTest", "SingleInverseIriTest",
 "AlternationTest", "ConcatTest", "ConcatKleeneTest", "KleeneIriConcatTest", "KleeneStarIriConcatTest", "IriKleeneStarConcat"));
+
+// TODO: add execute test using no loop caching

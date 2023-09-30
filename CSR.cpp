@@ -156,60 +156,166 @@ bool MappedCSR::operator == (const MappedCSR &c) const {
     return true;
 }
 
-void MultiLabelCSR::fillStats() {
-    size_t labelCnt = outCsr.size();
-    stats.outCnt.resize(labelCnt);
-    stats.inCnt.resize(labelCnt);
-    stats.outCooccur.resize(labelCnt);
-    stats.inCooccur.resize(labelCnt);
-    for (size_t i = 0; i < labelCnt; i++) {
-        stats.outCnt[i].assign(labelCnt, 0);
-        stats.inCnt[i].assign(labelCnt, 0);
-        stats.outCooccur[i].assign(labelCnt, 0);
-        stats.inCooccur[i].assign(labelCnt, 0);
-    }
-
-    // TODO: too slow on wikidata (each label can have >10^9 starting vertices), need to optimize
-    // Tried iterating the nodes to get all labels associated with each node, then process each edge, but even slower
-    // The following code with omp parallel for takes 40 min on 10^8 lines of wikidata
-    #pragma omp parallel for schedule(dynamic)
-    for (size_t y = 0; y < labelCnt; y++) {
-        for (const auto &pr : outCsr[y].v2idx) {
-        size_t v = pr.first, idx = pr.second;
-            size_t outDeg = idx < outCsr[y].n - 1 ? 
-                outCsr[y].offset[idx + 1] - outCsr[y].offset[idx] :
-                outCsr[y].m - outCsr[y].offset[idx];
-            // #pragma omp parallel for
-            for (size_t x = 0; x < labelCnt; x++) {
-                if (inCsr[x].v2idx.find(v) != inCsr[x].v2idx.end()) {
-                    size_t inner = inCsr[x].v2idx.at(v);
-                    size_t inDeg = inner < inCsr[x].n - 1 ?
-                        inCsr[x].offset[inner + 1] - inCsr[x].offset[inner] :
-                        inCsr[x].m - inCsr[x].offset[inner];
-                    stats.outCnt[x][y] += inDeg;
-                    stats.inCnt[y][x] += outDeg;
-                }
-                if (y != x && outCsr[x].v2idx.find(v) != outCsr[x].v2idx.end()) {
-                    size_t inner = outCsr[x].v2idx.at(v);
-                    size_t inner_outDeg = inner < outCsr[x].n - 1 ?
-                        outCsr[x].offset[inner + 1] - outCsr[x].offset[inner] :
-                        outCsr[x].m - outCsr[x].offset[inner];
-                    stats.outCooccur[x][y] += inner_outDeg;
-                }
-            }
-        }
-        for (const auto &pr : inCsr[y].v2idx) {
-            size_t v = pr.first;
-            // #pragma omp parallel for
-            for (size_t x = 0; x < labelCnt; x++) {
-                if (y != x && inCsr[x].v2idx.find(v) != inCsr[x].v2idx.end()) {
-                    size_t inner = inCsr[x].v2idx.at(v);
-                    size_t inDeg = inner < inCsr[x].n - 1 ?
-                        inCsr[x].offset[inner + 1] - inCsr[x].offset[inner] :
-                        inCsr[x].m - inCsr[x].offset[inner];
-                    stats.inCooccur[x][y] += inDeg;
+// Union the results in the list to get new result
+void QueryResult::assignAsUnion(const std::vector<QueryResult> &qrList) {
+    if (this->csrPtr && this->newed)
+        delete this->csrPtr;
+    this->csrPtr = new MappedCSR();
+    this->newed = true;
+    MappedCSR *curCsrPtr = nullptr, *innerCsrPtr = nullptr;
+    size_t numQr = qrList.size();
+    for (size_t i = 0; i < numQr; i++) {
+        if (qrList[i].hasEpsilon)
+            this->hasEpsilon = true;
+        curCsrPtr = qrList[i].csrPtr;
+        for (const auto &pr : curCsrPtr->v2idx) {
+            size_t v = pr.first, vIdx = pr.second;
+            if (this->csrPtr->v2idx.find(v) == this->csrPtr->v2idx.end()) {
+                this->csrPtr->v2idx[v] = this->csrPtr->offset.size();
+                this->csrPtr->offset.emplace_back(this->csrPtr->adj.size());
+                size_t adjStart = curCsrPtr->offset[vIdx], adjEnd = vIdx < curCsrPtr->n - 1 ? curCsrPtr->offset[vIdx + 1] : curCsrPtr->adj.size();
+                move(curCsrPtr->adj.begin() + adjStart, curCsrPtr->adj.begin() + adjEnd, std::back_inserter(this->csrPtr->adj));
+                for (size_t j = i + 1; j < numQr; j++) {
+                    innerCsrPtr = qrList[j].csrPtr;
+                    auto it = innerCsrPtr->v2idx.find(v);
+                    if (it != innerCsrPtr->v2idx.end()) {
+                        size_t vIdx2 = it->second;
+                        size_t adjStart2 = innerCsrPtr->offset[vIdx2], adjEnd2 = vIdx2 < innerCsrPtr->n - 1 ? innerCsrPtr->offset[vIdx2 + 1] : innerCsrPtr->adj.size();
+                        move(innerCsrPtr->adj.begin() + adjStart2, innerCsrPtr->adj.begin() + adjEnd2, std::back_inserter(this->csrPtr->adj));
+                    }
                 }
             }
         }
     }
+    this->csrPtr->n = this->csrPtr->v2idx.size();
+    this->csrPtr->m = this->csrPtr->adj.size();
 }
+
+// If encounter * or ? type:
+// If left & right both has epsilon, mark as has epsilon;
+// If only left (right) has epsilon, add all the right (left) results into the final result
+void QueryResult::assignAsJoin(const QueryResult &qrLeft, const QueryResult &qrRight) {
+    if (this->csrPtr && this->newed)
+        delete this->csrPtr;
+    this->csrPtr = new MappedCSR();
+    this->newed = true;
+    for (const auto &pr : qrLeft.csrPtr->v2idx) {
+        unordered_set<size_t> exist;
+        size_t v = pr.first, vIdx = pr.second;
+        size_t adjStart = qrLeft.csrPtr->offset[vIdx], adjEnd = vIdx < qrLeft.csrPtr->n - 1 ? qrLeft.csrPtr->offset[vIdx + 1] : qrLeft.csrPtr->adj.size();
+        for (size_t i = adjStart; i < adjEnd; i++) {
+            size_t nextNode = qrLeft.csrPtr->adj[i];
+            auto it = qrRight.csrPtr->v2idx.find(nextNode);
+            if (it != qrRight.csrPtr->v2idx.end()) {
+                size_t nextNodeIdx = it->second;
+                size_t adjStart2 = qrRight.csrPtr->offset[nextNodeIdx], adjEnd2 = nextNodeIdx < qrRight.csrPtr->n - 1 ? qrRight.csrPtr->offset[nextNodeIdx + 1] : qrRight.csrPtr->adj.size();
+                for (size_t j = adjStart2; j < adjEnd2; j++) {
+                    size_t nextNextNode = qrRight.csrPtr->adj[j];
+                    if (exist.find(nextNextNode) == exist.end()) {
+                        exist.emplace(nextNextNode);
+                        this->csrPtr->adj.emplace_back(nextNextNode);
+                    }
+                }
+            }
+        }
+        if (!qrLeft.hasEpsilon && qrRight.hasEpsilon) {
+            for (size_t i = adjStart; i < adjEnd; i++) {
+                size_t nextNode = qrLeft.csrPtr->adj[i];
+                if (exist.find(nextNode) == exist.end()) {
+                    exist.emplace(nextNode);
+                    this->csrPtr->adj.emplace_back(nextNode);
+                }
+            }
+        } else if (qrLeft.hasEpsilon && !qrRight.hasEpsilon) {
+            auto it = qrRight.csrPtr->v2idx.find(v);
+            if (it != qrRight.csrPtr->v2idx.end()) {
+                size_t vIdx2 = it->second;
+                size_t adjStart2 = qrRight.csrPtr->offset[vIdx2], adjEnd2 = vIdx2 < qrRight.csrPtr->n - 1 ? qrRight.csrPtr->offset[vIdx2 + 1] : qrRight.csrPtr->adj.size();
+                for (size_t j = adjStart2; j < adjEnd2; j++) {
+                    size_t nextNextNode = qrRight.csrPtr->adj[j];
+                    if (exist.find(nextNextNode) == exist.end()) {
+                        exist.emplace(nextNextNode);
+                        this->csrPtr->adj.emplace_back(nextNextNode);
+                    }
+                }
+            }
+        }
+        if (!exist.empty()) {
+            this->csrPtr->v2idx[v] = this->csrPtr->offset.size();
+            this->csrPtr->offset.emplace_back(this->csrPtr->adj.size() - exist.size());
+        }
+    }
+    if (qrLeft.hasEpsilon && !qrRight.hasEpsilon) {
+        // Handle the remaining results on the right
+        for (const auto &pr : qrRight.csrPtr->v2idx) {
+            size_t v = pr.first;
+            if (this->csrPtr->v2idx.find(v) == this->csrPtr->v2idx.end()) {
+                this->csrPtr->v2idx[v] = this->csrPtr->offset.size();
+                this->csrPtr->offset.emplace_back(this->csrPtr->adj.size());
+                size_t adjStart = qrRight.csrPtr->offset[pr.second], adjEnd = pr.second < qrRight.csrPtr->n - 1 ? qrRight.csrPtr->offset[pr.second + 1] : qrRight.csrPtr->adj.size();
+                move(qrRight.csrPtr->adj.begin() + adjStart, qrRight.csrPtr->adj.begin() + adjEnd, std::back_inserter(this->csrPtr->adj));
+            }
+        }
+    } else if (qrLeft.hasEpsilon && qrRight.hasEpsilon)
+        this->hasEpsilon = true;
+    this->csrPtr->n = this->csrPtr->v2idx.size();
+    this->csrPtr->m = this->csrPtr->adj.size();
+}
+
+// void MultiLabelCSR::fillStats() {
+//     size_t labelCnt = outCsr.size();
+//     stats.outCnt.resize(labelCnt);
+//     stats.inCnt.resize(labelCnt);
+//     stats.outCooccur.resize(labelCnt);
+//     stats.inCooccur.resize(labelCnt);
+//     for (size_t i = 0; i < labelCnt; i++) {
+//         stats.outCnt[i].assign(labelCnt, 0);
+//         stats.inCnt[i].assign(labelCnt, 0);
+//         stats.outCooccur[i].assign(labelCnt, 0);
+//         stats.inCooccur[i].assign(labelCnt, 0);
+//     }
+
+//     // TODO: too slow on wikidata (each label can have >10^9 starting vertices), need to optimize
+//     // Tried iterating the nodes to get all labels associated with each node, then process each edge, but even slower
+//     // The following code with omp parallel for takes 40 min on 10^8 lines of wikidata
+//     #pragma omp parallel for schedule(dynamic)
+//     for (size_t y = 0; y < labelCnt; y++) {
+//         for (const auto &pr : outCsr[y].v2idx) {
+//         size_t v = pr.first, idx = pr.second;
+//             size_t outDeg = idx < outCsr[y].n - 1 ? 
+//                 outCsr[y].offset[idx + 1] - outCsr[y].offset[idx] :
+//                 outCsr[y].m - outCsr[y].offset[idx];
+//             // #pragma omp parallel for
+//             for (size_t x = 0; x < labelCnt; x++) {
+//                 if (inCsr[x].v2idx.find(v) != inCsr[x].v2idx.end()) {
+//                     size_t inner = inCsr[x].v2idx.at(v);
+//                     size_t inDeg = inner < inCsr[x].n - 1 ?
+//                         inCsr[x].offset[inner + 1] - inCsr[x].offset[inner] :
+//                         inCsr[x].m - inCsr[x].offset[inner];
+//                     stats.outCnt[x][y] += inDeg;
+//                     stats.inCnt[y][x] += outDeg;
+//                 }
+//                 if (y != x && outCsr[x].v2idx.find(v) != outCsr[x].v2idx.end()) {
+//                     size_t inner = outCsr[x].v2idx.at(v);
+//                     size_t inner_outDeg = inner < outCsr[x].n - 1 ?
+//                         outCsr[x].offset[inner + 1] - outCsr[x].offset[inner] :
+//                         outCsr[x].m - outCsr[x].offset[inner];
+//                     stats.outCooccur[x][y] += inner_outDeg;
+//                 }
+//             }
+//         }
+//         for (const auto &pr : inCsr[y].v2idx) {
+//             size_t v = pr.first;
+//             // #pragma omp parallel for
+//             for (size_t x = 0; x < labelCnt; x++) {
+//                 if (y != x && inCsr[x].v2idx.find(v) != inCsr[x].v2idx.end()) {
+//                     size_t inner = inCsr[x].v2idx.at(v);
+//                     size_t inDeg = inner < inCsr[x].n - 1 ?
+//                         inCsr[x].offset[inner + 1] - inCsr[x].offset[inner] :
+//                         inCsr[x].m - inCsr[x].offset[inner];
+//                     stats.inCooccur[x][y] += inDeg;
+//                 }
+//             }
+//         }
+//     }
+// }

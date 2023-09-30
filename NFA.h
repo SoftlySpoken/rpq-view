@@ -63,6 +63,7 @@ struct NFA
 
     int **vis;
     std::shared_ptr<MappedCSR> execute(std::shared_ptr<const MultiLabelCSR> csrPtr);
+    bool checkIfValidSrc(size_t dataNode, std::shared_ptr<const MultiLabelCSR> csrPtr);
     void clearVis(unsigned gN);
 
     NFA(): curMaxId(0), vis(nullptr) {

@@ -304,12 +304,70 @@ void NFA::reverse() {
     initial = initialNew;
 }
 
+// DFS execution, return true as soon as a result is found
+bool NFA::checkIfValidSrc(size_t dataNode, std::shared_ptr<const MultiLabelCSR> csrPtr) {
+    stack<pair<unsigned, shared_ptr<State>>> st;
+    shared_ptr<State> s0 = this->initial;
+    unsigned v, nextV;
+    shared_ptr<State> s;
+    AdjInterval aitv;
+    unsigned sNode = 0;
+    clearVis(csrPtr->maxNode + 1);
+    st.emplace(dataNode, s0);
+    pair<unsigned, shared_ptr<State>> pr;
+    unordered_map<double, size_t>::const_iterator it;
+    while (!st.empty()) {
+        pr = st.top();
+        st.pop();
+        v = pr.first;
+        s = pr.second;
+        // Early return true when the next state is accept
+        for (const auto &oe : s->outEdges) {
+            it = csrPtr->label2idx.find(oe.lbl);
+            if (it == csrPtr->label2idx.end())
+                continue;
+            size_t curLblIdx = it->second;
+            auto forward = oe.forward;
+            auto dst = oe.dst;
+            if (forward) {
+                csrPtr->outCsr[curLblIdx].getAdjIntervalByVert(v, aitv);
+                if (aitv.len > 0) {
+                    if (this->isAccept(dst))
+                        return true;
+                    for (size_t j = 0; j < aitv.len; j++) {
+                        nextV = (*aitv.start)[aitv.offset + j];
+                        if (vis[dst->id][nextV] != int(sNode)) {
+                            // cout << v << ',' << nextV << ',' << dst->id << ' ';
+                            st.emplace(nextV, dst);
+                            vis[dst->id][nextV] = sNode;
+                        }
+                    }
+                }
+            } else {
+                csrPtr->inCsr[curLblIdx].getAdjIntervalByVert(v, aitv);
+                if (aitv.len > 0) {
+                    if (this->isAccept(dst))
+                        return true;
+                    for (size_t j = 0; j < aitv.len; j++) {
+                        nextV = (*aitv.start)[aitv.offset + j];
+                        if (vis[dst->id][nextV] != int(sNode)) {
+                            // cout << v << ',' << nextV << ',' << dst->id << ' ';
+                            st.emplace(nextV, dst);
+                            vis[dst->id][nextV] = sNode;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 std::shared_ptr<MappedCSR> NFA::execute(std::shared_ptr<const MultiLabelCSR> csrPtr) {
     queue<pair<unsigned, shared_ptr<State>>> q;
     shared_ptr<State> s0 = this->initial;
     unsigned v, nextV;
     shared_ptr<State> s;
-    pair<size_t, size_t> pr;
     AdjInterval aitv;
     size_t prevSz;
     vector<unsigned> tmpAdj, tmpOffset;
@@ -342,7 +400,8 @@ std::shared_ptr<MappedCSR> NFA::execute(std::shared_ptr<const MultiLabelCSR> csr
                     tmpAdj.emplace_back(v);
                 for (const auto &oe : s->outEdges) {
                     it = csrPtr->label2idx.find(oe.lbl);
-                    assert(it != csrPtr->label2idx.end());
+                    if (it == csrPtr->label2idx.end())
+                        continue;
                     size_t curLblIdx = it->second;
                     auto forward = oe.forward;
                     auto dst = oe.dst;

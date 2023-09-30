@@ -1,5 +1,7 @@
 #pragma once
 #include "CSR.h"
+#include "Rpq2NFAConvertor.h"
+#define SAMPLESZ 100
 
 struct LabelOrInverse {
     double lbl;
@@ -15,10 +17,11 @@ class AndOrDagNode {
     std::vector<LabelOrInverse> startLabel, endLabel; // Start/end labels for equivalence nodes
     int topoOrder;    // Topological order of the node
     size_t targetChild; // Target child for equivalence nodes whose children are concat nodes (nodeIdx, not idx in childIdx)
-    bool left2right;    // For concat op nodes, whether execute from left to right
+    bool left2right;    // For concat op nodes, whether execute from left to right; for Kleene op nodes, whether fix-point (true) or no loop caching (false)
+    std::shared_ptr<NFA> dfaPtr;    // DFA for equivalence nodes
 public:
-    AndOrDagNode(): isEq(true), opType(0), topoOrder(-1), targetChild(0), left2right(true) {}
-    AndOrDagNode(bool isEq_, char opType_): isEq(isEq_), opType(opType_), topoOrder(-1), targetChild(0), left2right(true) {}
+    AndOrDagNode(): isEq(true), opType(0), topoOrder(-1), targetChild(0), left2right(true), dfaPtr(nullptr) {}
+    AndOrDagNode(bool isEq_, char opType_): isEq(isEq_), opType(opType_), topoOrder(-1), targetChild(0), left2right(true), dfaPtr(nullptr) {}
     void addChild(size_t c) { childIdx.emplace_back(c); }
     void addParent(size_t c) { parentIdx.emplace_back(c); }
     void setIsEq(bool isEq_) { isEq = isEq_; }
@@ -39,19 +42,22 @@ public:
     size_t getTargetChild() const { return targetChild; }
     void setLeft2Right(bool left2right_) { left2right = left2right_; }
     bool getLeft2Right() const { return left2right; }
+    std::shared_ptr<NFA> getDfaPtr() const { return dfaPtr; }
 };
 
 class AndOrDag {
     std::vector<AndOrDagNode> nodes;
     std::unordered_map<std::string, size_t> q2idx;
+    std::vector<std::string> idx2q;
     std::vector<bool> materialized;
     std::vector<float> cost;
     std::vector<size_t> workloadFreq;
 
     // Cardinality stuff
     std::vector<size_t> srcCnt, dstCnt;
+    std::vector<size_t> card;
     std::vector<size_t> useCnt; // useCnt assumes the current subquery is used whenever possible, UB on any actual case
-    std::vector<float> pairProb;
+    // std::vector<float> pairProb;
 
     // View results
     std::vector<std::shared_ptr<MappedCSR>> res;
@@ -79,7 +85,9 @@ public:
     void execute(const std::string &q, QueryResult &qr); // Execute a query with the dag
     // Execute a node with the dag
     void executeNode(size_t nodeIdx, QueryResult &qr, const std::unordered_set<size_t> *lCandPtr=nullptr,
-        const std::unordered_set<size_t> *rCandPtr=nullptr);
+        const std::unordered_set<size_t> *rCandPtr=nullptr, QueryResult *nlcResPtr=nullptr);
+    // Return whether the node can be the src of a result
+    bool checkIfValidSrc(size_t dataNode, size_t regexNode);
     void serialize();   // Serialize the dag to a file
     void deserialize(); // Deserialize the dag from a file
 
@@ -107,20 +115,23 @@ public:
     std::unordered_map<std::string, size_t> &getQ2idx() { return q2idx; }
     const std::vector<size_t> &getSrcCnt() const { return srcCnt; }
     const std::vector<size_t> &getDstCnt() const { return dstCnt; }
-    const std::vector<float> &getPairProb() const { return pairProb; }
+    const std::vector<size_t> &getCard() const { return card; }
+    // const std::vector<float> &getPairProb() const { return pairProb; }
     const std::vector<float> &getCost() const { return cost; }
     std::vector<size_t> &getWorkloadFreq() { return workloadFreq; }
     std::vector<size_t> &getUseCnt() { return useCnt; }
     void setSrcCnt(size_t idx, size_t srcCnt_) { srcCnt[idx] = srcCnt_; }
     void setDstCnt(size_t idx, size_t dstCnt_) { dstCnt[idx] = dstCnt_; }
-    void setPairProb(size_t idx, float pairProb_) { pairProb[idx] = pairProb_; }
+    // void setPairProb(size_t idx, float pairProb_) { pairProb[idx] = pairProb_; }
     void setCost(size_t idx, float cost_) { cost[idx] = cost_; }
+    void setCard(size_t idx, size_t card_) { card[idx] = card_; }
     void setCsrPtr(std::shared_ptr<MultiLabelCSR> &csrPtr_) { csrPtr = csrPtr_; }
-    std::pair<float, float> getLeftRightWeight(const std::vector<LabelOrInverse> &lEnd, const std::vector<LabelOrInverse> &rStart);
+    // std::pair<float, float> getLeftRightWeight(const std::vector<LabelOrInverse> &lEnd, const std::vector<LabelOrInverse> &rStart);
     void addParentChild(size_t p, size_t c) {
         nodes[p].addChild(c);
         nodes[c].addParent(p);
     }
     void topoSort();
     bool isMaterialized(size_t idx) const { return materialized[idx]; }
+    float approxMiddleDivInMonteCarlo(const std::vector<LabelOrInverse> &endLabelVec, size_t nodeIdx);
 };

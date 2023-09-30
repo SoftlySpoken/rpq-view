@@ -58,11 +58,11 @@ struct Statistics {
 struct MultiLabelCSR {
     std::vector<MappedCSR> outCsr, inCsr;
     std::unordered_map<double, size_t> label2idx;
-    Statistics stats;
+    // Statistics stats;
     unsigned maxNode;   // The maximum node id
     MultiLabelCSR(): maxNode(0) {}
     void loadGraph(const std::string &filePath, LineSeq lineSeq=sop);
-    void fillStats();
+    // void fillStats();
 };
 
 struct QueryResult {
@@ -70,4 +70,6 @@ struct QueryResult {
     bool newed;
     bool hasEpsilon;    // include all (v, v) pairs, not explictly represented
     QueryResult(MappedCSR *csrPtr_, bool newed_): csrPtr(csrPtr_), newed(newed_), hasEpsilon(false) {}
+    void assignAsUnion(const std::vector<QueryResult> &qrList);
+    void assignAsJoin(const QueryResult &qrLeft, const QueryResult &qrRight);
 };

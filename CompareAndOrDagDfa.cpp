@@ -7,7 +7,7 @@ int main() {
     string graphFilePath = dataDir + "graph.txt";
     shared_ptr<MultiLabelCSR> csrPtr = make_shared<MultiLabelCSR>();
     csrPtr->loadGraph(graphFilePath, spo);
-    csrPtr->fillStats();
+    // csrPtr->fillStats();
 
     string queryFilePath = dataDir + "queries.txt";
     unordered_map<string, size_t> querySet;

@@ -27,7 +27,7 @@ add_executable(
 )
 add_executable(
   chooseMatViewsTheoCompare
-  chooseMatViewsTheoCompare.cpp AndOrDag.cpp Util.cpp CSR.cpp
+  chooseMatViewsTheoCompare.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
   parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
 )
 add_executable(
