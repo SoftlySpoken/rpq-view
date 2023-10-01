@@ -158,10 +158,7 @@ bool MappedCSR::operator == (const MappedCSR &c) const {
 
 // Union the results in the list to get new result
 void QueryResult::assignAsUnion(const std::vector<QueryResult> &qrList) {
-    if (this->csrPtr && this->newed)
-        delete this->csrPtr;
-    this->csrPtr = new MappedCSR();
-    this->newed = true;
+    this->tryNew();
     MappedCSR *curCsrPtr = nullptr, *innerCsrPtr = nullptr;
     size_t numQr = qrList.size();
     for (size_t i = 0; i < numQr; i++) {
@@ -195,10 +192,7 @@ void QueryResult::assignAsUnion(const std::vector<QueryResult> &qrList) {
 // If left & right both has epsilon, mark as has epsilon;
 // If only left (right) has epsilon, add all the right (left) results into the final result
 void QueryResult::assignAsJoin(const QueryResult &qrLeft, const QueryResult &qrRight) {
-    if (this->csrPtr && this->newed)
-        delete this->csrPtr;
-    this->csrPtr = new MappedCSR();
-    this->newed = true;
+    this->tryNew();
     for (const auto &pr : qrLeft.csrPtr->v2idx) {
         unordered_set<size_t> exist;
         size_t v = pr.first, vIdx = pr.second;

@@ -287,12 +287,14 @@ void AndOrDag::planNode(size_t nodeIdx) {
                 cost[nodeIdx] = (d - 1) * float(dstCnt[curChild]) * middleDivIn / float(srcCnt[curChild]);
                 // Annotate execution modes of Kleene
                 if (cost[curChild] < card[curChild]) {
-                    nodes[nodeIdx].setLeft2Right(true);
-                    cost[nodeIdx] *= cost[curChild];
-                } else {
                     nodes[nodeIdx].setLeft2Right(false);
+                    cost[nodeIdx] *= cost[curChild];
+                }
+                else {
+                    nodes[nodeIdx].setLeft2Right(true);
                     cost[nodeIdx] *= card[curChild];
                 }
+                // nodes[nodeIdx].setLeft2Right(true);
                 cost[nodeIdx] += cost[curChild] + (d - 1 + coeff) * card[curChild];
             }
         } else if (curOpType == 4) {
@@ -442,12 +444,13 @@ float &reducedCost, float updateCost) {
                         parentUpdateCost = (d - 1) * float(dstCnt[nodeIdx]) * middleDivIn / float(srcCnt[nodeIdx]);
                         // Annotate execution modes of Kleene
                         if (realUpdateCost < card[nodeIdx]) {
-                            nodes[parentIdx].setLeft2Right(true); // TODO: set parent?
+                            nodes[parentIdx].setLeft2Right(false);
                             parentUpdateCost *= realUpdateCost;
                         } else {
-                            nodes[parentIdx].setLeft2Right(false);
+                            nodes[parentIdx].setLeft2Right(true);
                             parentUpdateCost *= card[nodeIdx];
                         }
+                        // nodes[parentIdx].setLeft2Right(true);
                         parentUpdateCost += realUpdateCost + (d - 1 + coeff) * card[nodeIdx];
                     }
                     updateNodeCost(parentIdx, node2cost, reducedCost, parentUpdateCost);
@@ -655,7 +658,7 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
                     qr.csrPtr = leftCsrPtr;
                 }
                 else {
-                    qr.csrPtr = new MappedCSR();
+                    qr.tryNew();
                     if (lCandPtr && !rCandPtr) {
                         for (size_t curSrc : *lCandPtr) {
                             auto it = leftCsrPtr->v2idx.find(curSrc);
@@ -742,41 +745,24 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
         } else if (curOpType == 2 || curOpType == 3) {
             if (curNode.getLeft2Right()) {
                 // Fix-point
+                qr.tryNew();
                 QueryResult qrChild(nullptr, false);
                 executeNode(curChildIdx[0], qrChild, lCandPtr, rCandPtr, nlcResPtr);
                 unordered_map<size_t, vector<size_t>> node2Adj;
+                clearVis();
                 for (const auto &pr : qrChild.csrPtr->v2idx) {
                     size_t v = pr.first, vIdx = pr.second;
                     size_t adjStart = qrChild.csrPtr->offset[vIdx], adjEnd = vIdx < qrChild.csrPtr->n - 1 ? qrChild.csrPtr->offset[vIdx + 1] : qrChild.csrPtr->adj.size();
-                    unordered_set<size_t> exist(qrChild.csrPtr->adj.begin() + adjStart, qrChild.csrPtr->adj.begin() + adjEnd);
+                    for (size_t i = adjStart; i < adjEnd; i++)
+                        vis[qrChild.csrPtr->adj[i]] = v;
                     copy(qrChild.csrPtr->adj.begin() + adjStart, qrChild.csrPtr->adj.begin() + adjEnd, std::back_inserter(node2Adj[v]));
-                    for (size_t i = adjStart; i < adjEnd; i++) {
-                        size_t nextNode = qrChild.csrPtr->adj[i];
-                        auto it = qrChild.csrPtr->v2idx.find(nextNode);
-                        if (it != qrChild.csrPtr->v2idx.end()) {
-                            size_t nextNodeIdx = it->second;
-                            size_t adjStart2 = qrChild.csrPtr->offset[nextNodeIdx], adjEnd2 = nextNodeIdx < qrChild.csrPtr->n - 1 ?
-                                qrChild.csrPtr->offset[nextNodeIdx + 1] : qrChild.csrPtr->adj.size();
-                            for (size_t j = adjStart2; j < adjEnd2; j++) {
-                                size_t nextNextNode = qrChild.csrPtr->adj[j];
-                                if (exist.find(nextNextNode) == exist.end()) {
-                                    exist.emplace(nextNextNode);
-                                    node2Adj[v].emplace_back(nextNextNode);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                for (auto &pr : node2Adj) {
                     size_t curLen = 0, prevLen = 0;
-                    unordered_set<size_t> exist(pr.second.begin(), pr.second.end());
                     while (true) {
-                        curLen = pr.second.size();
+                        curLen = node2Adj[v].size();
                         if (curLen == prevLen)
                             break;
                         for (size_t i = prevLen; i < curLen; i++) {
-                            size_t nextNode = pr.second[i];
+                            size_t nextNode = node2Adj[v][i];
                             auto it = qrChild.csrPtr->v2idx.find(nextNode);
                             if (it != qrChild.csrPtr->v2idx.end()) {
                                 size_t nextNodeIdx = it->second;
@@ -784,23 +770,18 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
                                     qrChild.csrPtr->offset[nextNodeIdx + 1] : qrChild.csrPtr->adj.size();
                                 for (size_t j = adjStart2; j < adjEnd2; j++) {
                                     size_t nextNextNode = qrChild.csrPtr->adj[j];
-                                    if (exist.find(nextNextNode) == exist.end()) {
-                                        exist.emplace(nextNextNode);
-                                        pr.second.emplace_back(nextNextNode);
+                                    if (vis[nextNextNode] != int(pr.first)) {
+                                        vis[nextNextNode] = pr.first;
+                                        node2Adj[v].emplace_back(nextNextNode);
                                     }
                                 }
                             }
                         }
                         prevLen = curLen;
                     }
-                }
-                qr.csrPtr = new MappedCSR();
-                qr.newed = true;
-                for (const auto &pr : node2Adj) {
-                    size_t v = pr.first;
                     qr.csrPtr->v2idx[v] = qr.csrPtr->offset.size();
                     qr.csrPtr->offset.emplace_back(qr.csrPtr->adj.size());
-                    move(pr.second.begin(), pr.second.end(), std::back_inserter(qr.csrPtr->adj));
+                    move(node2Adj[v].begin(), node2Adj[v].end(), std::back_inserter(qr.csrPtr->adj));
                 }
                 qr.csrPtr->n = qr.csrPtr->v2idx.size();
                 qr.csrPtr->m = qr.csrPtr->adj.size();
@@ -808,21 +789,65 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
                     delete qrChild.csrPtr;
             } else {
                 // No loop caching
-                vector<QueryResult> qrVec;
-                qrVec.emplace_back(nullptr, false);
-                executeNode(curChildIdx[0], qrVec[0], lCandPtr, rCandPtr, nlcResPtr);
-                size_t prevHop = 0;
-                while (qrVec[prevHop].csrPtr->n > 0) {
-                    qrVec.emplace_back(nullptr, false);
-                    executeNode(curChildIdx[0], qrVec[prevHop + 1], nullptr, nullptr, &(qrVec[prevHop]));
-                    prevHop++;
+                // Only pump out the newly produced results to avoid infinite looping
+                qr.tryNew();
+                QueryResult qrFull(nullptr, false);
+                QueryResult qrOneNode(nullptr, true);
+                qrOneNode.tryNew();
+                qrOneNode.csrPtr->n = 1;
+                QueryResult qrCur(nullptr, false), qrNext(nullptr, false);
+                qrCur.tryNew();
+                qrCur.csrPtr->n = 1;
+                executeNode(curChildIdx[0], qrFull, lCandPtr, rCandPtr, nlcResPtr);
+                clearVis();
+                for (const auto &pr : qrFull.csrPtr->v2idx) {
+                    size_t v = pr.first, vIdx = pr.second;
+                    size_t adjStart = qrFull.csrPtr->offset[vIdx], adjEnd = vIdx < qrFull.csrPtr->n - 1 ? qrFull.csrPtr->offset[vIdx + 1] : qrFull.csrPtr->adj.size();
+                    for (size_t i = adjStart; i < adjEnd; i++)
+                        vis[qrFull.csrPtr->adj[i]] = v;
+                    // Re-initialize qrOneNode & qrCur
+                    qrOneNode.csrPtr->v2idx.clear();
+                    qrOneNode.csrPtr->v2idx[v] = 0;
+                    qrOneNode.csrPtr->m = adjEnd - adjStart;
+                    qrOneNode.csrPtr->offset.assign(1, 0);
+                    qrOneNode.csrPtr->adj.clear();
+                    std::move(qrFull.csrPtr->adj.begin() + adjStart, qrFull.csrPtr->adj.begin() + adjEnd, std::back_inserter(qrOneNode.csrPtr->adj));
+                    qrCur.csrPtr->v2idx.clear();
+                    qrCur.csrPtr->v2idx[v] = 0;
+                    qrCur.csrPtr->offset.assign(1, 0);
+                    bool firstIter = true;
+                    while (true) {
+                        // Execute next step; add the new results to qrOneNode; construct as the next seed, swap
+                        if (firstIter) {
+                            executeNode(curChildIdx[0], qrNext, nullptr, nullptr, &qrOneNode);
+                            firstIter = false;
+                        } else
+                            executeNode(curChildIdx[0], qrNext, nullptr, nullptr, &qrCur);
+                        qrCur.csrPtr->adj.clear();
+                        for (unsigned x : qrNext.csrPtr->adj) {
+                            if (vis[x] != int(v)) {
+                                vis[x] = v;
+                                qrOneNode.csrPtr->adj.emplace_back(x);
+                                qrCur.csrPtr->adj.emplace_back(x);
+                            }
+                        }
+                        if (qrCur.csrPtr->adj.empty())
+                            break;
+                        qrNext.csrPtr->adj.clear();
+                        
+                    }
+                    // Merge qrOneNode into qr
+                    qr.csrPtr->v2idx[v] = qr.csrPtr->offset.size();
+                    qr.csrPtr->offset.emplace_back(qr.csrPtr->adj.size());
+                    move(qrOneNode.csrPtr->adj.begin(), qrOneNode.csrPtr->adj.end(), std::back_inserter(qr.csrPtr->adj));
                 }
-                // Union the results
-                qr.assignAsUnion(qrVec);
-                for (size_t i = 0; i < qrVec.size(); i++) {
-                    if (qrVec[i].newed)
-                        delete qrVec[i].csrPtr;
-                }
+                qr.csrPtr->n = qr.csrPtr->v2idx.size();
+                qr.csrPtr->m = qr.csrPtr->adj.size();
+                // Delete the new'ed QueryResult
+                if (qrFull.csrPtr && qrFull.newed)  delete qrFull.csrPtr;
+                if (qrOneNode.csrPtr && qrOneNode.newed)  delete qrOneNode.csrPtr;
+                if (qrCur.csrPtr && qrCur.newed)  delete qrCur.csrPtr;
+                if (qrNext.csrPtr && qrNext.newed)  delete qrNext.csrPtr;
             }
             if (curOpType == 2)
                 qr.hasEpsilon = true;

@@ -67,9 +67,17 @@ class AndOrDag {
     // Map of materialized query indices to results
     std::unordered_map<size_t, MappedCSR> matRes;
 
+    int *vis;
+
 public:
-    AndOrDag(): csrPtr(nullptr) {}
-    AndOrDag(std::shared_ptr<MultiLabelCSR> csrPtr_): csrPtr(csrPtr_) {}
+    AndOrDag(): csrPtr(nullptr), vis(nullptr) {}
+    AndOrDag(std::shared_ptr<MultiLabelCSR> csrPtr_): csrPtr(csrPtr_), vis(nullptr) { clearVis(); }
+    void clearVis() {
+        size_t gN = csrPtr->maxNode + 1;
+        if (!vis)
+            vis = new int[gN];
+        memset(vis, -1, sizeof(int) * gN);
+    }
     void addWorkloadQuery(const std::string &q, size_t freq);   // Add the query q to the dag and mark as workload query
     int addQuery(const std::string &q);   // Add the query q to the dag
     void initAuxiliary();   // Call after finished constructing the dag
@@ -123,7 +131,7 @@ public:
     void setDstCnt(size_t idx, size_t dstCnt_) { dstCnt[idx] = dstCnt_; }
     void setCost(size_t idx, float cost_) { cost[idx] = cost_; }
     void setCard(size_t idx, size_t card_) { card[idx] = card_; }
-    void setCsrPtr(std::shared_ptr<MultiLabelCSR> &csrPtr_) { csrPtr = csrPtr_; }
+    void setCsrPtr(std::shared_ptr<MultiLabelCSR> &csrPtr_) { csrPtr = csrPtr_; clearVis(); }
     void addParentChild(size_t p, size_t c) {
         nodes[p].addChild(c);
         nodes[c].addParent(p);

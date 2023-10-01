@@ -82,7 +82,7 @@ void CustomTest(const std::string& testName) {
     }
 }
 
-void buildAndOrDagFromFile(AndOrDag &aod, const string &inputFileName, bool getTargetChild=false) {
+void buildAndOrDagFromFile(AndOrDag &aod, const string &inputFileName, bool getTargetChild=false, bool l2r=true) {
     std::ifstream inputFile(inputFileName);
     ASSERT_EQ(inputFile.is_open(), true);
     size_t numNodes = 0;
@@ -97,6 +97,7 @@ void buildAndOrDagFromFile(AndOrDag &aod, const string &inputFileName, bool getT
         inputFile >> isEq >> opType >> numChildren;
         aod.getNodes()[i].setIsEq(isEq);
         aod.getNodes()[i].setOpType(opType);
+        aod.getNodes()[i].setLeft2Right(l2r);
         for (size_t j = 0; j < numChildren; j++) {
             inputFile >> curChild;
             aod.addParentChild(i, curChild);
@@ -534,9 +535,9 @@ TEST_P(ExecuteTestSuite, ExecuteTest) {
     aod.setCsrPtr(csrPtr);
     string inputFileName = dataDir + testName + "_input.txt";
     if (testName == "ConcatTest")
-        buildAndOrDagFromFile(aod, inputFileName, true);
+        buildAndOrDagFromFile(aod, inputFileName, true, true);
     else
-        buildAndOrDagFromFile(aod, inputFileName, false);
+        buildAndOrDagFromFile(aod, inputFileName, false, true);
     aod.initAuxiliary();
     QueryResult qr(nullptr, false);
     string queryFileName = dataDir + testName + "_query.txt";
@@ -550,6 +551,19 @@ TEST_P(ExecuteTestSuite, ExecuteTest) {
     // Compare the actual result with the expected result
     string expectedOutputFileName = dataDir + testName + "_expected_output.txt";
     compareExecuteResult(expectedOutputFileName, csrPtr.get(), qr.csrPtr, false);
+
+    AndOrDag aodRev;    // Test right-to-left, no loop caching execution
+    aodRev.setCsrPtr(csrPtr);
+    if (testName == "ConcatTest")
+        buildAndOrDagFromFile(aodRev, inputFileName, true, false);
+    else
+        buildAndOrDagFromFile(aodRev, inputFileName, false, false);
+    aodRev.initAuxiliary();
+    QueryResult qrRev(nullptr, false);
+    aodRev.execute(q, qrRev);
+
+    // Compare the actual result with the expected result
+    compareExecuteResult(expectedOutputFileName, csrPtr.get(), qrRev.csrPtr, false);
 }
 
 TEST_P(ExecuteTestSuite, NfaExecuteTest) {
