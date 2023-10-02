@@ -19,9 +19,11 @@ class AndOrDagNode {
     size_t targetChild; // Target child for equivalence nodes whose children are concat nodes (nodeIdx, not idx in childIdx)
     bool left2right;    // For concat op nodes, whether execute from left to right; for Kleene op nodes, whether fix-point (true) or no loop caching (false)
     std::shared_ptr<NFA> dfaPtr;    // DFA for equivalence nodes
+    QueryResult res;  // Result pointer for materialized nodes
 public:
-    AndOrDagNode(): isEq(true), opType(0), topoOrder(-1), targetChild(0), left2right(true), dfaPtr(nullptr) {}
-    AndOrDagNode(bool isEq_, char opType_): isEq(isEq_), opType(opType_), topoOrder(-1), targetChild(0), left2right(true), dfaPtr(nullptr) {}
+    AndOrDagNode(): isEq(true), opType(0), topoOrder(-1), targetChild(0), left2right(true), dfaPtr(nullptr), res(nullptr, false) {}
+    AndOrDagNode(bool isEq_, char opType_): isEq(isEq_), opType(opType_), topoOrder(-1), targetChild(0), left2right(true), dfaPtr(nullptr), res(nullptr, false) {}
+    ~AndOrDagNode() { if (res.newed) delete res.csrPtr; }
     void addChild(size_t c) { childIdx.emplace_back(c); }
     void addParent(size_t c) { parentIdx.emplace_back(c); }
     void setIsEq(bool isEq_) { isEq = isEq_; }
@@ -43,6 +45,8 @@ public:
     void setLeft2Right(bool left2right_) { left2right = left2right_; }
     bool getLeft2Right() const { return left2right; }
     std::shared_ptr<NFA> getDfaPtr() const { return dfaPtr; }
+    QueryResult &getRes() { return res; }
+    const QueryResult &getRes() const { return res; }
 };
 
 class AndOrDag {
@@ -63,9 +67,6 @@ class AndOrDag {
     std::vector<std::shared_ptr<MappedCSR>> res;
 
     std::shared_ptr<MultiLabelCSR> csrPtr;
-
-    // Map of materialized query indices to results
-    std::unordered_map<size_t, MappedCSR> matRes;
 
     int *vis;
 
@@ -93,7 +94,7 @@ public:
     void execute(const std::string &q, QueryResult &qr); // Execute a query with the dag
     // Execute a node with the dag
     void executeNode(size_t nodeIdx, QueryResult &qr, const std::unordered_set<size_t> *lCandPtr=nullptr,
-        const std::unordered_set<size_t> *rCandPtr=nullptr, QueryResult *nlcResPtr=nullptr);
+        const std::unordered_set<size_t> *rCandPtr=nullptr, QueryResult *nlcResPtr=nullptr, int curMatIdx=-1);
     void serialize();   // Serialize the dag to a file
     void deserialize(); // Deserialize the dag from a file
 
@@ -135,6 +136,14 @@ public:
         nodes[c].addParent(p);
     }
     void topoSort();
-    bool isMaterialized(size_t idx) const { return materialized[idx]; }
+    bool isMaterialized(size_t idx) const {
+        if (idx >= nodes.size())
+            return false;
+        return materialized[idx];
+    }
+    void setMaterialized(size_t idx) {
+        if (idx < nodes.size())
+            materialized[idx] = true;
+    }
     float approxMiddleDivInMonteCarlo(const std::vector<LabelOrInverse> &endLabelVec, size_t nodeIdx);
 };

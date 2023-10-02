@@ -624,18 +624,26 @@ void AndOrDag::execute(const std::string &q, QueryResult &qr) {
     auto it = q2idx.find(q);
     if (it == q2idx.end())
         return;
-    size_t qIdx = it->second;
-    if (materialized[qIdx])
-        qr.csrPtr = &(matRes[qIdx]);    // return pointer to materialized result
-    executeNode(qIdx, qr);
+    executeNode(it->second, qr);
 }
 
 // Added no loop caching execution
 void AndOrDag::executeNode(size_t nodeIdx, QueryResult &qr, const std::unordered_set<size_t> *lCandPtr,
-const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
+const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr, int curMatIdx) {
     const auto &curNode = nodes[nodeIdx];
     const auto &curChildIdx = curNode.getChildIdx();
     if (curNode.getIsEq()) {
+        // If current node materialized
+        // Let AndOrDag take care of the memory deallocation
+        if (materialized[nodeIdx] && curMatIdx != int(nodeIdx)) {
+            if (nlcResPtr)
+                qr.assignAsJoin(*nlcResPtr, curNode.getRes());  // Join nlcRes with the materialized result, forgoing candidate filtering
+            else {
+                qr = curNode.getRes();
+                qr.newed = false;
+            }
+            return;
+        }
         if (curChildIdx.empty()) {
             // Single label
             // Implements candidate filtering
@@ -956,4 +964,18 @@ float AndOrDag::approxMiddleDivInMonteCarlo(const std::vector<LabelOrInverse> &e
         }
     }
     return middleDivIn;
+}
+
+void AndOrDag::materialize() {
+    priority_queue<pair<size_t, size_t>, vector<pair<size_t, size_t>>, decltype(&PairSecondLess<size_t, size_t>)> pq(PairSecondLess);
+    size_t numNodes = nodes.size();
+    for (size_t i = 0; i < numNodes; i++)
+        if (materialized[i])
+            pq.emplace(i, nodes[i].getTopoOrder());
+    while (!pq.empty()) {
+        size_t curIdx = pq.top().first;
+        pq.pop();
+        // During the materialization of a node, its own materialized flag should be ignored, but not others'
+        executeNode(curIdx, nodes[curIdx].getRes(), nullptr, nullptr, nullptr, curIdx);
+    }
 }

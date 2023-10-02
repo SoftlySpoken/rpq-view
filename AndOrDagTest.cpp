@@ -134,7 +134,7 @@ void buildAndOrDagFromFile(AndOrDag &aod, const string &inputFileName, bool getT
     inputFile.close();
 }
 
-class ExecuteTestSuite : public ::testing::TestWithParam<std::string> {
+class ExecuteTestSuite : public ::testing::TestWithParam<std::pair<std::string, bool>> {
 protected:
     std::shared_ptr<MultiLabelCSR> csrPtr;
     std::string dataDir;
@@ -474,6 +474,7 @@ TEST_P(ChooseMatViewsTestSuite, KleeneIriConcatTest) {
     }
 }
 
+// TODO: write a function to generate the params
 INSTANTIATE_TEST_SUITE_P(ChooseMatViewsTestSuiteInstance, ChooseMatViewsTestSuite,
 ::testing::Values(vector<size_t>({0, 0, numeric_limits<size_t>::max()}), vector<size_t>({0, 0, 4}),
 vector<size_t>({0, 1, numeric_limits<size_t>::max()}), vector<size_t>({0, 1, 4}),
@@ -530,7 +531,20 @@ MappedCSR *resCsrPtr, bool explicitEpsilon=false) {
 }
 
 TEST_P(ExecuteTestSuite, ExecuteTest) {
-    const string &testName = GetParam();
+    const auto &pr = GetParam();
+    const string &testName = pr.first;
+    bool mat = pr.second;
+    // If materialize flag == true, read nodes to materialize from file; materialize the nodes
+    vector<size_t> matIdx;
+    if (mat) {
+        string matIdxFileName = dataDir + testName + "_matIdx.txt";
+        std::ifstream matIdxFile(matIdxFileName);
+        ASSERT_EQ(matIdxFile.is_open(), true);
+        size_t curMatIdx = 0;
+        while (matIdxFile >> curMatIdx)
+            matIdx.emplace_back(curMatIdx);
+        matIdxFile.close();
+    }
     AndOrDag aod;
     aod.setCsrPtr(csrPtr);
     string inputFileName = dataDir + testName + "_input.txt";
@@ -539,6 +553,12 @@ TEST_P(ExecuteTestSuite, ExecuteTest) {
     else
         buildAndOrDagFromFile(aod, inputFileName, false, true);
     aod.initAuxiliary();
+    if (mat) {
+        for (size_t i : matIdx)
+            aod.setMaterialized(i);
+        aod.materialize();
+    }
+
     QueryResult qr(nullptr, false);
     string queryFileName = dataDir + testName + "_query.txt";
     std::ifstream queryFile(queryFileName);
@@ -559,6 +579,11 @@ TEST_P(ExecuteTestSuite, ExecuteTest) {
     else
         buildAndOrDagFromFile(aodRev, inputFileName, false, false);
     aodRev.initAuxiliary();
+    if (mat) {
+        for (size_t i : matIdx)
+            aodRev.setMaterialized(i);
+        aodRev.materialize();
+    }
     QueryResult qrRev(nullptr, false);
     aodRev.execute(q, qrRev);
 
@@ -567,7 +592,8 @@ TEST_P(ExecuteTestSuite, ExecuteTest) {
 }
 
 TEST_P(ExecuteTestSuite, NfaExecuteTest) {
-    const string &testName = GetParam();
+    const auto &pr = GetParam();
+    const string &testName = pr.first;  // Same procedure whether materialize or not
     string queryFileName = dataDir + testName + "_query.txt";
     std::ifstream queryFile(queryFileName);
     ASSERT_EQ(queryFile.is_open(), true);
@@ -582,7 +608,14 @@ TEST_P(ExecuteTestSuite, NfaExecuteTest) {
     compareExecuteResult(expectedOutputFileName, csrPtr.get(), res.get(), true);
 }
 
-INSTANTIATE_TEST_SUITE_P(ExecuteTestSuiteInstance, ExecuteTestSuite, ::testing::Values("SingleIriTest", "SingleInverseIriTest",
-"AlternationTest", "ConcatTest", "ConcatKleeneTest", "KleeneIriConcatTest", "KleeneStarIriConcatTest", "IriKleeneStarConcat"));
-
-// TODO: add execute test using no loop caching
+std::vector<std::string> executeTestNames({"SingleIriTest", "SingleInverseIriTest", "AlternationTest", "ConcatTest",
+"ConcatKleeneTest", "KleeneIriConcatTest", "KleeneStarIriConcatTest", "IriKleeneStarConcat"});
+std::vector<std::pair<std::string, bool>> genExecuteTestNamesWithMode() {
+    std::vector<std::pair<std::string, bool>> ret;
+    for (const auto &testName : executeTestNames) {
+        ret.emplace_back(testName, true);
+        ret.emplace_back(testName, false);
+    }
+    return ret;
+}
+INSTANTIATE_TEST_SUITE_P(ExecuteTestSuiteInstance, ExecuteTestSuite, ::testing::ValuesIn(genExecuteTestNamesWithMode()));
