@@ -1,7 +1,7 @@
 #pragma once
 #include "CSR.h"
 #include "Rpq2NFAConvertor.h"
-#define SAMPLESZ 100
+#define SAMPLESZ 10
 
 struct LabelOrInverse {
     double lbl;
@@ -94,8 +94,6 @@ public:
     // Execute a node with the dag
     void executeNode(size_t nodeIdx, QueryResult &qr, const std::unordered_set<size_t> *lCandPtr=nullptr,
         const std::unordered_set<size_t> *rCandPtr=nullptr, QueryResult *nlcResPtr=nullptr);
-    // Return whether the node can be the src of a result
-    bool checkIfValidSrc(size_t dataNode, size_t regexNode);
     void serialize();   // Serialize the dag to a file
     void deserialize(); // Deserialize the dag from a file
 

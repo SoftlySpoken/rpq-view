@@ -249,53 +249,68 @@ void AndOrDag::planNode(size_t nodeIdx) {
             // Concatenation: preserve the choice of left to right or right to left
             assert(numChild == 2);
             size_t lChild = curChildIdx[0], rChild = curChildIdx[1];
-            float plan1 = 0, plan2 = 0;
-            float cost1 = cost[lChild], cost2 = cost[rChild];
-            float middleDivIn = approxMiddleDivInMonteCarlo(nodes[lChild].getEndLabel(), rChild);
-            card[nodeIdx] = middleDivIn * card[lChild] * card[rChild] / srcCnt[rChild];
-            size_t joinSetSz = dstCnt[lChild] * middleDivIn;
-            plan1 = cost1 + cost2 * joinSetSz / srcCnt[rChild];
-            plan2 = cost2 + cost1 * middleDivIn;
-            cost[nodeIdx] = (plan1 < plan2 ? plan1 : plan2) + card[lChild] + card[rChild];
-            srcCnt[nodeIdx] = srcCnt[lChild] * middleDivIn;
-            dstCnt[nodeIdx] = float(dstCnt[lChild]) * middleDivIn * float(dstCnt[rChild]) / float(srcCnt[rChild]);
+            if (card[lChild] == 0 || srcCnt[lChild] == 0 || dstCnt[lChild] == 0 \
+            || card[rChild] == 0 || srcCnt[rChild] == 0 || dstCnt[rChild] == 0) {
+                cost[nodeIdx] = 0;
+                card[nodeIdx] = 0;
+                srcCnt[nodeIdx] = 0;
+                dstCnt[nodeIdx] = 0;
+            } else {
+                float plan1 = 0, plan2 = 0;
+                float cost1 = cost[lChild], cost2 = cost[rChild];
+                float middleDivIn = approxMiddleDivInMonteCarlo(nodes[lChild].getEndLabel(), rChild);
+                card[nodeIdx] = middleDivIn * card[lChild] * card[rChild] / srcCnt[rChild];
+                size_t joinSetSz = dstCnt[lChild] * middleDivIn;
+                plan1 = cost1 + cost2 * joinSetSz / srcCnt[rChild];
+                plan2 = cost2 + cost1 * middleDivIn;
+                cost[nodeIdx] = (plan1 < plan2 ? plan1 : plan2) + card[lChild] + card[rChild];
+                srcCnt[nodeIdx] = srcCnt[lChild] * middleDivIn;
+                dstCnt[nodeIdx] = float(dstCnt[lChild]) * middleDivIn * float(dstCnt[rChild]) / float(srcCnt[rChild]);
+            }
         } else if (curOpType == 2 || curOpType == 3) {
             assert(numChild == 1);
             size_t curChild = curChildIdx[0];
-            srcCnt[nodeIdx] = srcCnt[curChild];
-            dstCnt[nodeIdx] = dstCnt[curChild];
-            float middleDivIn = approxMiddleDivInMonteCarlo(nodes[curChild].getEndLabel(), curChild);
-            float c = middleDivIn * card[curChild] / srcCnt[curChild];
-            size_t d = 1;
-            float curC = c;
-            if (c >= 1)
-                d = 6;
-            else {
-                size_t curCard = c * card[curChild];
-                while (curCard != 0) {
-                    curCard *= c;
-                    d++;
-                    curC *= c;
-                }
-            }
-            if (d == 1) {
-                card[nodeIdx] = card[curChild];
-                cost[nodeIdx] = cost[curChild];
+            if (card[curChild] == 0 || srcCnt[curChild] == 0 || dstCnt[curChild] == 0) {
+                cost[nodeIdx] = 0;
+                card[nodeIdx] = 0;
+                srcCnt[nodeIdx] = 0;
+                dstCnt[nodeIdx] = 0;
             } else {
-                float coeff = (1. - curC) / (1. - c);
-                card[nodeIdx] = coeff * float(card[curChild]);
-                cost[nodeIdx] = (d - 1) * float(dstCnt[curChild]) * middleDivIn / float(srcCnt[curChild]);
-                // Annotate execution modes of Kleene
-                if (cost[curChild] < card[curChild]) {
-                    nodes[nodeIdx].setLeft2Right(false);
-                    cost[nodeIdx] *= cost[curChild];
-                }
+                srcCnt[nodeIdx] = srcCnt[curChild];
+                dstCnt[nodeIdx] = dstCnt[curChild];
+                float middleDivIn = approxMiddleDivInMonteCarlo(nodes[curChild].getEndLabel(), curChild);
+                float c = middleDivIn * card[curChild] / srcCnt[curChild];  // c is NAN when srcCnt[curChild] == 0
+                size_t d = 1;
+                float curC = c;
+                if (c >= 1)
+                    d = 6;
                 else {
-                    nodes[nodeIdx].setLeft2Right(true);
-                    cost[nodeIdx] *= card[curChild];
+                    size_t curCard = c * card[curChild];
+                    while (curCard != 0) {
+                        curCard *= c;
+                        d++;
+                        curC *= c;
+                    }
                 }
-                // nodes[nodeIdx].setLeft2Right(true);
-                cost[nodeIdx] += cost[curChild] + (d - 1 + coeff) * card[curChild];
+                if (d == 1) {
+                    card[nodeIdx] = card[curChild];
+                    cost[nodeIdx] = cost[curChild];
+                } else {
+                    float coeff = (1. - curC) / (1. - c);
+                    card[nodeIdx] = coeff * float(card[curChild]);
+                    cost[nodeIdx] = (d - 1) * float(dstCnt[curChild]) * middleDivIn / float(srcCnt[curChild]);
+                    // Annotate execution modes of Kleene
+                    if (cost[curChild] < card[curChild]) {
+                        nodes[nodeIdx].setLeft2Right(false);
+                        cost[nodeIdx] *= cost[curChild];
+                    }
+                    else {
+                        nodes[nodeIdx].setLeft2Right(true);
+                        cost[nodeIdx] *= card[curChild];
+                    }
+                    // nodes[nodeIdx].setLeft2Right(true);
+                    cost[nodeIdx] += cost[curChild] + (d - 1 + coeff) * card[curChild];
+                }
             }
         } else if (curOpType == 4) {
             // ?
@@ -411,6 +426,9 @@ float &reducedCost, float updateCost) {
                 }
                 // TODO: cache joinSetSz if resampling is slow
                 float plan1 = 0, plan2 = 0;
+                if (card[lChild] == 0 || srcCnt[lChild] == 0 || dstCnt[lChild] == 0 \
+                || card[rChild] == 0 || srcCnt[rChild] == 0 || dstCnt[rChild] == 0)
+                    return; // Parent's cost is already 0 so cannot be lower
                 float cost1 = node2cost.find(lChild) == node2cost.end() ? cost[lChild] : node2cost[lChild];
                 float cost2 = node2cost.find(rChild) == node2cost.end() ? cost[rChild] : node2cost[rChild];
                 float middleDivIn = approxMiddleDivInMonteCarlo(nodes[lChild].getEndLabel(), rChild);
@@ -420,39 +438,37 @@ float &reducedCost, float updateCost) {
                 parentUpdateCost = (plan1 < plan2 ? plan1 : plan2) + card[lChild] + card[rChild];
                 updateNodeCost(parentIdx, node2cost, reducedCost, parentUpdateCost);
             } else if (parentOpType == 2 || parentOpType == 3) {
-                if (realUpdateCost >= card[nodeIdx])
-                    updateNodeCost(parentIdx, node2cost, reducedCost, parentPrevCost - deltaCost);
+                if (card[nodeIdx] == 0 || srcCnt[nodeIdx] == 0 || dstCnt[nodeIdx] == 0)
+                    return; // Parent's cost is already 0 so cannot be lower
+                float middleDivIn = approxMiddleDivInMonteCarlo(nodes[nodeIdx].getEndLabel(), nodeIdx);
+                float c = middleDivIn * card[nodeIdx] / srcCnt[nodeIdx];
+                size_t d = 1;
+                float curC = c;
+                if (c >= 1)
+                    d = 6;
                 else {
-                    float middleDivIn = approxMiddleDivInMonteCarlo(nodes[nodeIdx].getEndLabel(), nodeIdx);
-                    float c = middleDivIn * card[nodeIdx] / srcCnt[nodeIdx];
-                    size_t d = 1;
-                    float curC = c;
-                    if (c >= 1)
-                        d = 6;
-                    else {
-                        size_t curCard = c * card[nodeIdx];
-                        while (curCard != 0) {
-                            curCard *= c;
-                            d++;
-                            curC *= c;
-                        }
+                    size_t curCard = c * card[nodeIdx];
+                    while (curCard != 0) {
+                        curCard *= c;
+                        d++;
+                        curC *= c;
                     }
-                    if (d == 1)
-                        parentUpdateCost = cost[nodeIdx];
-                    else {
-                        float coeff = (1. - curC) / (1. - c);
-                        parentUpdateCost = (d - 1) * float(dstCnt[nodeIdx]) * middleDivIn / float(srcCnt[nodeIdx]);
-                        // Annotate execution modes of Kleene
-                        if (realUpdateCost < card[nodeIdx]) {
-                            nodes[parentIdx].setLeft2Right(false);
-                            parentUpdateCost *= realUpdateCost;
-                        } else {
-                            nodes[parentIdx].setLeft2Right(true);
-                            parentUpdateCost *= card[nodeIdx];
-                        }
-                        // nodes[parentIdx].setLeft2Right(true);
-                        parentUpdateCost += realUpdateCost + (d - 1 + coeff) * card[nodeIdx];
+                }
+                if (d == 1)
+                    parentUpdateCost = cost[nodeIdx];
+                else {
+                    float coeff = (1. - curC) / (1. - c);
+                    parentUpdateCost = (d - 1) * float(dstCnt[nodeIdx]) * middleDivIn / float(srcCnt[nodeIdx]);
+                    // Annotate execution modes of Kleene
+                    if (realUpdateCost < card[nodeIdx]) {
+                        nodes[parentIdx].setLeft2Right(false);
+                        parentUpdateCost *= realUpdateCost;
+                    } else {
+                        nodes[parentIdx].setLeft2Right(true);
+                        parentUpdateCost *= card[nodeIdx];
                     }
+                    // nodes[parentIdx].setLeft2Right(true);
+                    parentUpdateCost += realUpdateCost + (d - 1 + coeff) * card[nodeIdx];
                     updateNodeCost(parentIdx, node2cost, reducedCost, parentUpdateCost);
                 }
             }
@@ -643,7 +659,6 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
                 // Join nlcRes with the single label, forgoing candidate filtering
                 QueryResult tmpQr(leftCsrPtr, false);
                 qr.assignAsJoin(*nlcResPtr, tmpQr);
-
             } else {
                 if (lCandPtr && rCandPtr) {
                     // Depending on preference, set the unused one as nullptr
@@ -722,19 +737,41 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
             if (curNode.getLeft2Right()) {
                 executeNode(curChildIdx[0], qrLeft, lCandPtr, nullptr, nlcResPtr);
                 if (!qrLeft.hasEpsilon) {
+                    if (qrLeft.csrPtr->empty()) {
+                        qr.assignAsEmpty();
+                        if (qrLeft.newed) delete qrLeft.csrPtr;
+                        return;
+                    }
                     for (size_t x : qrLeft.csrPtr->adj)
                         curCand.emplace(x);
                     executeNode(curChildIdx[1], qrRight, &curCand, nullptr);
                 } else
                     executeNode(curChildIdx[1], qrRight, nullptr, nullptr);
+                if (qrRight.csrPtr->empty()) {
+                    qr.assignAsEmpty();
+                    if (qrLeft.newed) delete qrLeft.csrPtr;
+                    if (qrLeft.newed) delete qrLeft.csrPtr;
+                    return;
+                }
             } else {
                 executeNode(curChildIdx[1], qrRight, nullptr, rCandPtr);
                 if (!qrRight.hasEpsilon) {
+                    if (qrRight.csrPtr->empty()) {
+                        qr.assignAsEmpty();
+                        if (qrRight.newed) delete qrRight.csrPtr;
+                        return;
+                    }
                     for (const auto &x : qrRight.csrPtr->v2idx)
                         curCand.emplace(x.first);
                     executeNode(curChildIdx[0], qrLeft, nullptr, &curCand, nlcResPtr);
                 } else
                     executeNode(curChildIdx[0], qrLeft, nullptr, nullptr, nlcResPtr);
+                if (qrLeft.csrPtr->empty()) {
+                    qr.assignAsEmpty();
+                    if (qrLeft.newed) delete qrLeft.csrPtr;
+                    if (qrRight.newed) delete qrRight.csrPtr;
+                    return;
+                }
             }
             // Join
             qr.assignAsJoin(qrLeft, qrRight);
@@ -748,6 +785,11 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
                 qr.tryNew();
                 QueryResult qrChild(nullptr, false);
                 executeNode(curChildIdx[0], qrChild, lCandPtr, rCandPtr, nlcResPtr);
+                if (qrChild.csrPtr->empty()) {
+                    qr.assignAsEmpty();
+                    if (qrChild.newed) delete qrChild.csrPtr;
+                    return;
+                }
                 unordered_map<size_t, vector<size_t>> node2Adj;
                 clearVis();
                 for (const auto &pr : qrChild.csrPtr->v2idx) {
@@ -790,15 +832,20 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
             } else {
                 // No loop caching
                 // Only pump out the newly produced results to avoid infinite looping
-                qr.tryNew();
                 QueryResult qrFull(nullptr, false);
+                executeNode(curChildIdx[0], qrFull, lCandPtr, rCandPtr, nlcResPtr);
+                if (qrFull.csrPtr->empty()) {
+                    qr.assignAsEmpty();
+                    if (qrFull.newed) delete qrFull.csrPtr;
+                    return;
+                }
+                qr.tryNew();
                 QueryResult qrOneNode(nullptr, true);
                 qrOneNode.tryNew();
                 qrOneNode.csrPtr->n = 1;
                 QueryResult qrCur(nullptr, false), qrNext(nullptr, false);
                 qrCur.tryNew();
                 qrCur.csrPtr->n = 1;
-                executeNode(curChildIdx[0], qrFull, lCandPtr, rCandPtr, nlcResPtr);
                 clearVis();
                 for (const auto &pr : qrFull.csrPtr->v2idx) {
                     size_t v = pr.first, vIdx = pr.second;
@@ -858,28 +905,13 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr) {
     }
 }
 
-bool AndOrDag::checkIfValidSrc(size_t dataNode, size_t regexNode) {
-    // regexNode must be an equivalence node
-    string regexStr = idx2q[regexNode];
-    if (regexStr.empty())
-        return false;
-
-    // Store a pointer to the automaton in the node (will probably fetch multiple times)
-    std::shared_ptr<NFA> curDfaPtr = nodes[regexNode].getDfaPtr();
-    if (!curDfaPtr) {
-        Rpq2NFAConvertor cvrt;
-        curDfaPtr = cvrt.convert(regexStr)->convert2Dfa();
-    }
-    return curDfaPtr->checkIfValidSrc(dataNode, csrPtr);
-}
-
 float AndOrDag::approxMiddleDivInMonteCarlo(const std::vector<LabelOrInverse> &endLabelVec, size_t nodeIdx) {
     size_t inSz = 0;
     float middleDivIn = 0;
     for (const LabelOrInverse &endLabel : endLabelVec) {
         auto it = csrPtr->label2idx.find(endLabel.lbl);
         if (it == csrPtr->label2idx.end())
-            return 0;
+            continue;
         size_t lblIdx = it->second;
         const MappedCSR *lblCsrPtr = nullptr;
         if (!endLabel.inv) {
@@ -890,12 +922,24 @@ float AndOrDag::approxMiddleDivInMonteCarlo(const std::vector<LabelOrInverse> &e
             lblCsrPtr = &(csrPtr->outCsr[lblIdx]);
             inSz = csrPtr->outCsr[it->second].n;
         }
+        if (inSz == 0)
+            continue;
         size_t numExists = 0, curN = lblCsrPtr->n;
         unordered_map<unsigned, unsigned>::const_iterator v2idxIt;
+        // cout << endLabel.lbl;
+        // if (endLabel.inv)
+        //     cout << "-";
+        // cout << " " << nodeIdx << endl;
+        std::shared_ptr<NFA> curDfaPtr = nodes[nodeIdx].getDfaPtr();
+        if (!curDfaPtr) {
+            Rpq2NFAConvertor cvrt;
+            curDfaPtr = cvrt.convert(idx2q[nodeIdx])->convert2Dfa();
+        }
+        curDfaPtr->clearVis(csrPtr->maxNode + 1);
         if (SAMPLESZ >= curN) {
             for (const auto &pr : lblCsrPtr->v2idx) {
                 size_t curSrc = pr.first;
-                if (checkIfValidSrc(curSrc, nodeIdx))
+                if (curDfaPtr->checkIfValidSrc(curSrc, csrPtr))
                     numExists++;
             }
             middleDivIn += float(numExists) / float(inSz);
@@ -905,7 +949,7 @@ float AndOrDag::approxMiddleDivInMonteCarlo(const std::vector<LabelOrInverse> &e
                 v2idxIt = lblCsrPtr->v2idx.begin();
                 std::advance(v2idxIt, curIdx);
                 size_t curSrc = v2idxIt->first;
-                if (checkIfValidSrc(curSrc, nodeIdx))
+                if (curDfaPtr->checkIfValidSrc(curSrc, csrPtr))
                     numExists++;
             }
             middleDivIn += float(numExists) / float(SAMPLESZ) * float(curN) / float(inSz);

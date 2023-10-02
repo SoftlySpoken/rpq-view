@@ -40,7 +40,7 @@ int main() {
         aod.execute(pr.first, qr);
         end_time = std::chrono::steady_clock::now();
         elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        std::cout << "AND-OR DAG execution used: " << elapsed_microseconds.count() << " ms" << std::endl;
+        std::cout << "AND-OR DAG execution used: " << elapsed_microseconds.count() << " us" << std::endl;
         if (qr.newed)
             delete qr.csrPtr;
 
@@ -49,6 +49,6 @@ int main() {
         shared_ptr<MappedCSR> res = dfaPtr->execute(csrPtr);
         end_time = std::chrono::steady_clock::now();
         elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        std::cout << "DFA execution used: " << elapsed_microseconds.count() << " ms" << std::endl;
+        std::cout << "DFA execution used: " << elapsed_microseconds.count() << " us" << std::endl;
     }
 }

@@ -312,7 +312,6 @@ bool NFA::checkIfValidSrc(size_t dataNode, std::shared_ptr<const MultiLabelCSR> 
     shared_ptr<State> s;
     AdjInterval aitv;
     unsigned sNode = 0;
-    clearVis(csrPtr->maxNode + 1);
     st.emplace(dataNode, s0);
     pair<unsigned, shared_ptr<State>> pr;
     unordered_map<double, size_t>::const_iterator it;

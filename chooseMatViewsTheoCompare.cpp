@@ -32,12 +32,12 @@ int main() {
     LineSeq lseq = sop;
     if (graphName == "wikidata")
         lseq = spo;
-    csrPtr->loadGraph(graphFilePath, lseq);
     auto start_time = std::chrono::steady_clock::now();
+    csrPtr->loadGraph(graphFilePath, lseq);
     // csrPtr->fillStats();
     auto end_time = std::chrono::steady_clock::now();
     std::chrono::microseconds elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    std::cout << "Elapsed time: " << elapsed_microseconds.count() / 1000000.0 << " seconds" << std::endl;
+    std::cout << "Read graph time: " << elapsed_microseconds.count() / 1000.0 << " ms" << std::endl;
     
     // Construct DAG and plan
     AndOrDag aod(csrPtr);
@@ -45,7 +45,11 @@ int main() {
         aod.addWorkloadQuery(p.first, p.second);
     aod.initAuxiliary();
     aod.annotateLeafCostCard();
+    start_time = std::chrono::steady_clock::now();
     aod.plan();
+    end_time = std::chrono::steady_clock::now();
+    elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+    std::cout << "Plan time: " << elapsed_microseconds.count() / 1000.0 << " ms" << std::endl;
 
     // Choose materialized views
     size_t numModes = 5;
@@ -53,7 +57,11 @@ int main() {
     float curCostReduction = 0;
     for (size_t i = 0; i < numModes; i++) {
         AndOrDag tmpAod(aod);
+        start_time = std::chrono::steady_clock::now();
         curCostReduction = tmpAod.chooseMatViews(i, usedSpace, budget);
+        end_time = std::chrono::steady_clock::now();
+        elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        std::cout << "Choose materialized views time: " << elapsed_microseconds.count() / 1000.0 << " ms" << std::endl;
         // For each selection method, get the overall cost reduction; print the selected views and the cost reduction
         cout << i << " " << (unsigned long long)(curCostReduction) << " " << usedSpace << endl;
         const auto &q2idx = tmpAod.getQ2idx();

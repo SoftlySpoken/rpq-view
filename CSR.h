@@ -70,6 +70,11 @@ struct QueryResult {
     QueryResult(MappedCSR *csrPtr_, bool newed_): csrPtr(csrPtr_), newed(newed_), hasEpsilon(false) {}
     void assignAsUnion(const std::vector<QueryResult> &qrList);
     void assignAsJoin(const QueryResult &qrLeft, const QueryResult &qrRight);
+    void assignAsEmpty() {
+        tryNew();
+        csrPtr->n = 0;
+        csrPtr->m = 0;
+    }
     void clearCsrContent() {
         csrPtr->n = 0;
         csrPtr->m = 0;
