@@ -55,8 +55,10 @@ void MultiLabelCSR::loadGraph(const std::string &filePath, LineSeq lineSeq) {
     
     // Out
     // Sort tmpEdgeList by PSO
-    sort(tmpEdgeList.begin(), tmpEdgeList.end(), compEdgeNodePSO);
+    sort(std::execution::par, tmpEdgeList.begin(), tmpEdgeList.end(), compEdgeNodePSO);
 
+    // TODO: use omp parallel for to handle each label
+    // Can I do it without sort?
     for (const auto &te : tmpEdgeList) {
         if (curLabel != int(te.label)) {
             if (curLabel != -1) {
@@ -87,7 +89,7 @@ void MultiLabelCSR::loadGraph(const std::string &filePath, LineSeq lineSeq) {
 
     // In
     // Sort tmpEdgeList by POS
-    sort(tmpEdgeList.begin(), tmpEdgeList.end(), compEdgeNodePOS);
+    sort(std::execution::par, tmpEdgeList.begin(), tmpEdgeList.end(), compEdgeNodePOS);
 
     for (const auto &te : tmpEdgeList) {
         if (curLabel != int(te.label)) {

@@ -4,7 +4,7 @@ project(my_project)
 # GoogleTest requires at least C++14
 # set(CMAKE_CXX_COMPILER "/usr/local/bin/g++")
 # set(CMAKE_C_COMPILER "/usr/local/bin/gcc")
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_COMPILER_VERSION "10.1.0")
 
@@ -19,6 +19,7 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 
 find_package(OpenMP REQUIRED)
+find_package(TBB REQUIRED)
 
 add_executable(
   AndOrDagTest
@@ -40,19 +41,19 @@ target_include_directories(chooseMatViewsTheoCompare PRIVATE /home/pangyue/gstor
 target_include_directories(CompareAndOrDagDfa PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
 target_link_libraries(
   AndOrDagTest
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a GTest::gtest_main OpenMP::OpenMP_CXX
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a GTest::gtest_main OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
   chooseMatViewsTheoCompare
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
   CompareAndOrDagDfa
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
-target_compile_options(AndOrDagTest PRIVATE -g -Wall -DTEST $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
-target_compile_options(chooseMatViewsTheoCompare PRIVATE -g -Wall -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
-target_compile_options(CompareAndOrDagDfa PRIVATE -g -Wall -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
+target_compile_options(AndOrDagTest PRIVATE -g -Wall -std=c++17 -DTEST $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
+target_compile_options(chooseMatViewsTheoCompare PRIVATE -g -Wall -std=c++17 -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
+target_compile_options(CompareAndOrDagDfa PRIVATE -g -Wall -std=c++17 -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
 
 include(GoogleTest)
 gtest_discover_tests(AndOrDagTest)
