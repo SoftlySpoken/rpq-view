@@ -8,7 +8,7 @@
 #include "AndOrDag.h"
 using namespace std;
 
-int main() {
+int main(int argc, char **argv) {
     // Read workload queries
     string dataDir = "../real_data/";
     string graphName = "wikidata";
@@ -25,6 +25,16 @@ int main() {
         else
             it->second++;
     }
+    size_t numModes = 5;
+    size_t usedSpace = 0, budget = 1000000;
+    bool execute = false;
+    if (argc == 2 && (strcmp(argv[1], "-e") == 0 || strcmp(argv[1], "--execute") == 0)) {
+        cout << "Execute mode." << endl;
+        execute = true;
+    }
+    QueryResult qr(nullptr, false);
+    float naiveTime = 0;
+    vector<float> viewTimeVec(numModes, 0);
 
     // Read graph
     std::shared_ptr<MultiLabelCSR> csrPtr = make_shared<MultiLabelCSR>();
@@ -41,7 +51,7 @@ int main() {
     
     // Construct DAG and plan
     AndOrDag aod(csrPtr);
-    for (auto &p: q2freq)
+    for (const auto &p: q2freq)
         aod.addWorkloadQuery(p.first, p.second);
     aod.initAuxiliary();
     aod.annotateLeafCostCard();
@@ -50,10 +60,19 @@ int main() {
     end_time = std::chrono::steady_clock::now();
     elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     std::cout << "Plan time: " << elapsed_microseconds.count() / 1000.0 << " ms" << std::endl;
+    if (execute) {
+        for (const auto &p: q2freq) {
+            start_time = std::chrono::steady_clock::now();
+            aod.execute(p.first, qr);
+            end_time = std::chrono::steady_clock::now();
+            elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            // std::cout << p.first << " " << elapsed_microseconds.count() << std::endl;
+            naiveTime += elapsed_microseconds.count() * float(p.second);
+        }
+    }
+    std::cout << "Naive execution time: " << naiveTime << " us" << std::endl;
 
     // Choose materialized views
-    size_t numModes = 5;
-    size_t usedSpace = 0, budget = 1000000;
     float curCostReduction = 0;
     for (size_t i = 0; i < numModes; i++) {
         AndOrDag tmpAod(aod);
@@ -61,7 +80,7 @@ int main() {
         curCostReduction = tmpAod.chooseMatViews(i, usedSpace, budget);
         end_time = std::chrono::steady_clock::now();
         elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        std::cout << "Choose materialized views time: " << elapsed_microseconds.count() / 1000.0 << " ms" << std::endl;
+        std::cout << "Choose materialized views time: " << elapsed_microseconds.count() << " us" << std::endl;
         // For each selection method, get the overall cost reduction; print the selected views and the cost reduction
         cout << i << " " << (unsigned long long)(curCostReduction) << " " << usedSpace << endl;
         const auto &q2idx = tmpAod.getQ2idx();
@@ -70,5 +89,21 @@ int main() {
                 cout << pr.first << " ";
         }
         cout << endl;
+        if (execute) {
+            start_time = std::chrono::steady_clock::now();
+            tmpAod.materialize();
+            end_time = std::chrono::steady_clock::now();
+            elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            std::cout << "Materialize views time: " << elapsed_microseconds.count() << " us" << std::endl;
+            for (const auto &p: q2freq) {
+                start_time = std::chrono::steady_clock::now();
+                tmpAod.execute(p.first, qr);
+                end_time = std::chrono::steady_clock::now();
+                elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+                // std::cout << p.first << " " << elapsed_microseconds.count() << std::endl;
+                viewTimeVec[i] += elapsed_microseconds.count() * float(p.second);
+            }
+            std::cout << "Mode " << i << " execution time: " << viewTimeVec[i] << " us" << std::endl;
+        }
     }
 }

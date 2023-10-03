@@ -619,7 +619,7 @@ float AndOrDag::chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget,
  * Note: since we cannot be sure that the result is new'ed (e.g., base label in CSR), use raw pointer.
  */
 void AndOrDag::execute(const std::string &q, QueryResult &qr) {
-    if (qr.csrPtr || q.empty())
+    if (q.empty())
         return;
     auto it = q2idx.find(q);
     if (it == q2idx.end())
@@ -758,7 +758,7 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr, int curMatId
                 if (qrRight.csrPtr->empty()) {
                     qr.assignAsEmpty();
                     if (qrLeft.newed) delete qrLeft.csrPtr;
-                    if (qrLeft.newed) delete qrLeft.csrPtr;
+                    if (qrRight.newed) delete qrRight.csrPtr;
                     return;
                 }
             } else {
@@ -976,6 +976,12 @@ void AndOrDag::materialize() {
         size_t curIdx = pq.top().first;
         pq.pop();
         // During the materialization of a node, its own materialized flag should be ignored, but not others'
+        // The reverse topological order guarantees correctness
+        // cout << idx2q[curIdx] << " ";
+        // auto start_time = std::chrono::steady_clock::now();
         executeNode(curIdx, nodes[curIdx].getRes(), nullptr, nullptr, nullptr, curIdx);
+        // auto end_time = std::chrono::steady_clock::now();
+        // auto elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        // std::cout << elapsed_microseconds.count() << " us" << std::endl;
     }
 }

@@ -88,7 +88,15 @@ struct QueryResult {
             this->csrPtr = new MappedCSR();
             this->newed = true;
         }
-        else
-            this->clearCsrContent();
+        else {
+            if (this->newed)
+                this->clearCsrContent();
+            else {
+                // Could be not newed! (e.g., single label)
+                this->csrPtr = new MappedCSR();
+                this->newed = true;
+            }
+        }
+        this->hasEpsilon = false;
     }
 };
