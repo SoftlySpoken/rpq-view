@@ -11,11 +11,11 @@ bool PairSecondGreater(const pair<T1, T2> &p1, const pair<T1, T2> &p2) {
     return p1.second > p2.second;
 }
 
-void AndOrDag::addWorkloadQuery(const std::string &q, size_t freq) {
+void AndOrDag::addWorkloadQuery(const std::string &q, size_t curFreq) {
     int ret = addQuery(q);
     if (ret >= 0) {
-        useCnt[ret] += freq;
-        workloadFreq[ret] += freq;
+        freq[ret] += curFreq;
+        workloadFreq[ret] += curFreq;
     }
 }
 
@@ -183,24 +183,47 @@ void AndOrDag::plan() {
     }
     size_t numNodes = nodes.size();
     for (size_t i = 0; i < numNodes; i++) {
-        if (useCnt[i] > 0)
+        if (freq[i] > 0)
             planNode(i);
     }
-    // Propagate useCnt downwards only once from all root nodes (those without parents)
+    propagate();
+}
+
+void AndOrDag::propagate() {
+    // Propagate freq & useCnt downwards only once from all root nodes (those without parents)
+    size_t numNodes = nodes.size();
     for (size_t i = 0; i < numNodes; i++) {
         if (nodes[i].getParentIdx().empty())
-            propagateUseCnt(i);
+            propagateFreq(i, freq[i]);
+        if (workloadFreq[i] > 0)
+            propagateUseCnt(i, 1);
     }
 }
 
-void AndOrDag::propagateUseCnt(size_t idx) {
+void AndOrDag::propagateFreq(size_t idx, size_t propVal) {
     const auto &curChildIdx = nodes[idx].getChildIdx();
     size_t numChild = curChildIdx.size();
     if (numChild == 0)
         return;
     for (size_t i = 0; i < numChild; i++) {
-        useCnt[curChildIdx[i]] += useCnt[idx];
-        propagateUseCnt(curChildIdx[i]);
+        freq[curChildIdx[i]] += propVal;
+        propagateFreq(curChildIdx[i], propVal);
+    }
+}
+
+void AndOrDag::propagateUseCnt(size_t idx, int delta) {
+    useCnt[idx] += delta;
+    if (materialized[idx])
+        return;
+    const auto &curChildIdx = nodes[idx].getChildIdx();
+    size_t numChild = curChildIdx.size();
+    if (numChild == 0)
+        return;
+    if (nodes[idx].getIsEq() && numChild > 1)
+        propagateUseCnt(nodes[idx].getTargetChild(), delta);
+    else {
+        for (size_t i = 0; i < numChild; i++)
+            propagateUseCnt(curChildIdx[i], delta);
     }
 }
 
@@ -251,7 +274,7 @@ void AndOrDag::planNode(size_t nodeIdx) {
             size_t lChild = curChildIdx[0], rChild = curChildIdx[1];
             if (card[lChild] == 0 || srcCnt[lChild] == 0 || dstCnt[lChild] == 0 \
             || card[rChild] == 0 || srcCnt[rChild] == 0 || dstCnt[rChild] == 0) {
-                cost[nodeIdx] = 0;
+                cost[nodeIdx] = cost[lChild] < cost[rChild] ? cost[lChild] : cost[rChild];
                 card[nodeIdx] = 0;
                 srcCnt[nodeIdx] = 0;
                 dstCnt[nodeIdx] = 0;
@@ -271,7 +294,7 @@ void AndOrDag::planNode(size_t nodeIdx) {
             assert(numChild == 1);
             size_t curChild = curChildIdx[0];
             if (card[curChild] == 0 || srcCnt[curChild] == 0 || dstCnt[curChild] == 0) {
-                cost[nodeIdx] = 0;
+                cost[nodeIdx] = cost[curChild];
                 card[nodeIdx] = 0;
                 srcCnt[nodeIdx] = 0;
                 dstCnt[nodeIdx] = 0;
@@ -294,7 +317,7 @@ void AndOrDag::planNode(size_t nodeIdx) {
                 }
                 if (d == 1) {
                     card[nodeIdx] = card[curChild];
-                    cost[nodeIdx] = cost[curChild];
+                    cost[nodeIdx] = 2 * cost[curChild];
                 } else {
                     float coeff = (1. - curC) / (1. - c);
                     card[nodeIdx] = coeff * float(card[curChild]);
@@ -355,6 +378,7 @@ void AndOrDag::topoSort() {
 
 void AndOrDag::replanWithMaterialize(const std::vector<size_t> &matIdx,
 std::unordered_map<size_t, float> &node2cost, float &reducedCost) {
+    node2cost.clear();
     reducedCost = 0;
     // matIdx & topoOrder
     priority_queue<pair<size_t, size_t>, vector<pair<size_t, size_t>>, decltype(&PairSecondLess<size_t, size_t>)> pq(PairSecondLess);
@@ -367,7 +391,7 @@ std::unordered_map<size_t, float> &node2cost, float &reducedCost) {
     }
 }
 
-void AndOrDag::applyChanges(const std::unordered_map<size_t, float> &node2cost) {
+void AndOrDag::applyChanges(const std::vector<size_t> &matIdx, const std::unordered_map<size_t, float> &node2cost, bool updateUseCnt) {
     for (const auto &pr : node2cost) {
         size_t nodeIdx = pr.first;
         cost[nodeIdx] = pr.second;
@@ -377,9 +401,23 @@ void AndOrDag::applyChanges(const std::unordered_map<size_t, float> &node2cost) 
             std::unordered_map<size_t, float>::const_iterator it;
             for (size_t parent : parentIdx) {
                 it = node2cost.find(parent);
-                if (it != node2cost.end() && it->second == pr.second)
+                if (it != node2cost.end() && it->second == pr.second) {
+                    if (updateUseCnt) {
+                        size_t origTargetChild = nodes[parent].getTargetChild();
+                        propagateUseCnt(origTargetChild, 0 - useCnt[parent]);
+                        propagateUseCnt(nodeIdx, useCnt[parent]);
+                    }
                     nodes[parent].setTargetChild(nodeIdx);
+                }
             }
+        }
+    }
+    if (updateUseCnt) {
+        size_t tmpUseCnt = 0;
+        for (size_t idx : matIdx) {
+            tmpUseCnt = useCnt[idx];
+            propagateUseCnt(idx, 0 - tmpUseCnt);
+            useCnt[idx] = tmpUseCnt;
         }
     }
 }
@@ -426,49 +464,53 @@ float &reducedCost, float updateCost) {
                 }
                 // TODO: cache joinSetSz if resampling is slow
                 float plan1 = 0, plan2 = 0;
-                if (card[lChild] == 0 || srcCnt[lChild] == 0 || dstCnt[lChild] == 0 \
-                || card[rChild] == 0 || srcCnt[rChild] == 0 || dstCnt[rChild] == 0)
-                    return; // Parent's cost is already 0 so cannot be lower
                 float cost1 = node2cost.find(lChild) == node2cost.end() ? cost[lChild] : node2cost[lChild];
                 float cost2 = node2cost.find(rChild) == node2cost.end() ? cost[rChild] : node2cost[rChild];
-                float middleDivIn = approxMiddleDivInMonteCarlo(nodes[lChild].getEndLabel(), rChild);
-                size_t joinSetSz = dstCnt[lChild] * middleDivIn;
-                plan1 = cost1 + cost2 * joinSetSz / srcCnt[rChild];
-                plan2 = cost2 + cost1 * middleDivIn;
-                parentUpdateCost = (plan1 < plan2 ? plan1 : plan2) + card[lChild] + card[rChild];
+                if (card[lChild] == 0 || srcCnt[lChild] == 0 || dstCnt[lChild] == 0 \
+                || card[rChild] == 0 || srcCnt[rChild] == 0 || dstCnt[rChild] == 0)
+                    parentUpdateCost = cost1 < cost2 ? cost1 : cost2;
+                else {
+                    float middleDivIn = approxMiddleDivInMonteCarlo(nodes[lChild].getEndLabel(), rChild);
+                    size_t joinSetSz = dstCnt[lChild] * middleDivIn;
+                    plan1 = cost1 + cost2 * joinSetSz / srcCnt[rChild];
+                    plan2 = cost2 + cost1 * middleDivIn;
+                    parentUpdateCost = (plan1 < plan2 ? plan1 : plan2) + card[lChild] + card[rChild];
+                }
                 updateNodeCost(parentIdx, node2cost, reducedCost, parentUpdateCost);
             } else if (parentOpType == 2 || parentOpType == 3) {
                 if (card[nodeIdx] == 0 || srcCnt[nodeIdx] == 0 || dstCnt[nodeIdx] == 0)
-                    return; // Parent's cost is already 0 so cannot be lower
-                float middleDivIn = approxMiddleDivInMonteCarlo(nodes[nodeIdx].getEndLabel(), nodeIdx);
-                float c = middleDivIn * card[nodeIdx] / srcCnt[nodeIdx];
-                size_t d = 1;
-                float curC = c;
-                if (c >= 1)
-                    d = 6;
+                    updateNodeCost(parentIdx, node2cost, reducedCost, realUpdateCost);  // parent's cost equal to child's
                 else {
-                    size_t curCard = c * card[nodeIdx];
-                    while (curCard != 0) {
-                        curCard *= c;
-                        d++;
-                        curC *= c;
+                    float middleDivIn = approxMiddleDivInMonteCarlo(nodes[nodeIdx].getEndLabel(), nodeIdx);
+                    float c = middleDivIn * card[nodeIdx] / srcCnt[nodeIdx];
+                    size_t d = 1;
+                    float curC = c;
+                    if (c >= 1)
+                        d = 6;
+                    else {
+                        size_t curCard = c * card[nodeIdx];
+                        while (curCard != 0) {
+                            curCard *= c;
+                            d++;
+                            curC *= c;
+                        }
                     }
-                }
-                if (d == 1)
-                    parentUpdateCost = cost[nodeIdx];
-                else {
-                    float coeff = (1. - curC) / (1. - c);
-                    parentUpdateCost = (d - 1) * float(dstCnt[nodeIdx]) * middleDivIn / float(srcCnt[nodeIdx]);
-                    // Annotate execution modes of Kleene
-                    if (realUpdateCost < card[nodeIdx]) {
-                        nodes[parentIdx].setLeft2Right(false);
-                        parentUpdateCost *= realUpdateCost;
-                    } else {
-                        nodes[parentIdx].setLeft2Right(true);
-                        parentUpdateCost *= card[nodeIdx];
+                    if (d == 1)
+                        parentUpdateCost = cost[nodeIdx];
+                    else {
+                        float coeff = (1. - curC) / (1. - c);
+                        parentUpdateCost = (d - 1) * float(dstCnt[nodeIdx]) * middleDivIn / float(srcCnt[nodeIdx]);
+                        // Annotate execution modes of Kleene
+                        if (realUpdateCost < card[nodeIdx]) {
+                            nodes[parentIdx].setLeft2Right(false);
+                            parentUpdateCost *= realUpdateCost;
+                        } else {
+                            nodes[parentIdx].setLeft2Right(true);
+                            parentUpdateCost *= card[nodeIdx];
+                        }
+                        // nodes[parentIdx].setLeft2Right(true);
+                        parentUpdateCost += realUpdateCost + (d - 1 + coeff) * card[nodeIdx];
                     }
-                    // nodes[parentIdx].setLeft2Right(true);
-                    parentUpdateCost += realUpdateCost + (d - 1 + coeff) * card[nodeIdx];
                     updateNodeCost(parentIdx, node2cost, reducedCost, parentUpdateCost);
                 }
             }
@@ -479,8 +521,8 @@ float &reducedCost, float updateCost) {
 /**
  * @brief Choose views to materialize given a space budget
  * 
- * @param mode 0: greedy, 1: top workloadFreq, 2: top useCnt, 3: top benefit upper bound (useCnt * (cost - card)),
- * 4: Kleene closures with top benefit upper bound
+ * @param mode 0: greedy, 1: top workloadFreq, 2: top freq, 3: top benefit upper bound (freq * (cost - card)),
+ * 4: Kleene closures with top benefit upper bound, 5: top freq with redundancy removal
  * @param spaceBudget space budget (#node pairs, estimated)
  * @param testOut for testing only
  * @return the total real benefit brought by materialization
@@ -488,12 +530,13 @@ float &reducedCost, float updateCost) {
 float AndOrDag::chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget, std::string *testOut) {
     // Put all candidate views into a priority queue, sorted by benefit (descending)
     usedSpace = 0;
+    vector<size_t> vIdxAdded, vIdxRemoved;
     if (mode == 0) {
         priority_queue<pair<size_t, float>, vector<pair<size_t, float>>, decltype(&PairSecondLess<size_t, float>)> pq(PairSecondLess);
         size_t numNodes = nodes.size();
         for (size_t i = 0; i < numNodes; i++) {
             if (nodes[i].getIsEq() && !nodes[i].getChildIdx().empty()) {
-                float benefit = (cost[i] - card[i]) * float(useCnt[i]);
+                float benefit = (cost[i] - card[i]) * float(freq[i]);
                 pq.emplace(i, benefit);
             }
         }
@@ -549,13 +592,14 @@ float AndOrDag::chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget,
                     continue;   // Continue to try other candidates
                 materialized[curIdx] = true;
                 usedSpace += addSpace;
-                applyChanges(node2costMap[curIdx]);
+                applyChanges({curIdx}, node2costMap[curIdx]);
                 stateId++;
                 totalRealBenefit += realBenefitMap[curIdx];
             }
         }
         return totalRealBenefit;
     } else if (mode == 1 || mode == 2 || mode == 3 || mode == 4) {
+        // vector + sort no more efficient than priority_queue (bottleneck at replan)
         priority_queue<pair<size_t, float>, vector<pair<size_t, float>>, decltype(&PairSecondLess<size_t, float>)> pq(PairSecondLess);
         size_t numNodes = nodes.size();
         for (size_t i = 0; i < numNodes; i++) {
@@ -563,15 +607,16 @@ float AndOrDag::chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget,
                 if (mode == 1)
                     pq.emplace(i, workloadFreq[i]);
                 else if (mode == 2)
-                    pq.emplace(i, useCnt[i]);
+                    pq.emplace(i, freq[i]);
                 else if (mode == 3)
-                    pq.emplace(i, float(useCnt[i]) * (cost[i] - card[i]));
+                    pq.emplace(i, float(freq[i]) * (cost[i] - card[i]));
                 else {
                     const auto &curChildIdx = nodes[i].getChildIdx();
                     if (curChildIdx.size() == 1) {
                         char curOpType = nodes[curChildIdx[0]].getOpType();
                         if (curOpType == 2 || curOpType == 3)
-                            pq.emplace(i, float(useCnt[i]) * (cost[i] - card[i]));
+                            // pq.emplace(i, float(freq[i]) * (cost[i] - card[i]));
+                            pq.emplace(i, freq[i]);
                     }
                 }
             }
@@ -604,8 +649,77 @@ float AndOrDag::chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget,
         }
         unordered_map<size_t, float> node2cost;
         float realBenefit = 0;
+        auto start_time = std::chrono::steady_clock::now();
         replanWithMaterialize(matIdx, node2cost, realBenefit);
-        applyChanges(node2cost);
+        auto end_time = std::chrono::steady_clock::now();
+        std::chrono::microseconds elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        std::cout << "Replan time: " << elapsed_microseconds.count() << " us" << std::endl;
+        applyChanges(matIdx, node2cost);
+        return realBenefit;
+    } else if (mode == 5) {
+        // Top freq with redundancy removal
+        priority_queue<pair<size_t, float>, vector<pair<size_t, float>>, decltype(&PairSecondLess<size_t, float>)> pq(PairSecondLess);
+        size_t numNodes = nodes.size();
+        for (size_t i = 0; i < numNodes; i++)
+            if (nodes[i].getIsEq() && !nodes[i].getChildIdx().empty())
+                pq.emplace(i, freq[i]);
+        size_t addSpace = 0;
+        unordered_map<size_t, float> node2cost;
+        float realBenefit = 0;
+        unordered_map<size_t, float> node2benefit;
+        unordered_set<size_t> curMatIdx;
+        vector<size_t> idx2erase;
+        while (usedSpace < spaceBudget && !pq.empty()) {
+            size_t curIdx = pq.top().first;
+            pq.pop();
+            if (useCnt[curIdx] == 0) {
+                // cout << "Skip1 " << curIdx << endl;
+                continue;
+            }
+            #ifdef TEST
+            if (testOut)
+                *testOut += to_string(curIdx) + " ";
+            #endif
+            addSpace = card[curIdx];
+            if (usedSpace + addSpace > spaceBudget) {
+                #ifdef TEST
+                if (testOut)
+                    *testOut += "0 ";
+                #endif
+                continue;
+            }
+            #ifdef TEST
+            if (testOut)
+                *testOut += "1 ";
+            #endif
+            node2benefit[curIdx] = 0;
+            replanWithMaterialize({curIdx}, node2cost, node2benefit[curIdx]);
+            // card == 0 will have 0 cost if their single-path descendants are materialized,
+            // but materializing them is harmless since their real cardinality may be greater than 0 but not very large
+            if (node2benefit[curIdx] == 0 && card[curIdx] > 0) {
+                // cout << "Skip3 " << curIdx << endl;
+                continue;
+            }
+            usedSpace += addSpace;
+            realBenefit += node2benefit[curIdx];
+            // cout << node2benefit[curIdx] << " " << realBenefit << endl;
+            applyChanges({curIdx}, node2cost, true);
+            materialized[curIdx] = true;
+
+            idx2erase.clear();
+            for (size_t idx : curMatIdx) {
+                if (useCnt[idx] == 0) {
+                    // cout << "Skip2 " << idx << endl;
+                    idx2erase.emplace_back(idx);
+                    materialized[idx] = false;  // Do not need to propagate useCnt because == 0
+                    usedSpace -= card[idx];
+                    realBenefit -= node2benefit[idx];
+                }
+            }
+            for (size_t idx : idx2erase)
+                curMatIdx.erase(idx);
+            curMatIdx.emplace(curIdx);
+        }
         return realBenefit;
     }
     return -1;
@@ -799,12 +913,12 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr, int curMatId
                     return;
                 }
                 unordered_map<size_t, vector<size_t>> node2Adj;
-                clearVis();
+                clearVis(NUMSTATES - 1);
                 for (const auto &pr : qrChild.csrPtr->v2idx) {
                     size_t v = pr.first, vIdx = pr.second;
                     size_t adjStart = qrChild.csrPtr->offset[vIdx], adjEnd = vIdx < qrChild.csrPtr->n - 1 ? qrChild.csrPtr->offset[vIdx + 1] : qrChild.csrPtr->adj.size();
                     for (size_t i = adjStart; i < adjEnd; i++)
-                        vis[qrChild.csrPtr->adj[i]] = v;
+                        vis[0][qrChild.csrPtr->adj[i]] = v;
                     copy(qrChild.csrPtr->adj.begin() + adjStart, qrChild.csrPtr->adj.begin() + adjEnd, std::back_inserter(node2Adj[v]));
                     size_t curLen = 0, prevLen = 0;
                     while (true) {
@@ -820,8 +934,8 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr, int curMatId
                                     qrChild.csrPtr->offset[nextNodeIdx + 1] : qrChild.csrPtr->adj.size();
                                 for (size_t j = adjStart2; j < adjEnd2; j++) {
                                     size_t nextNextNode = qrChild.csrPtr->adj[j];
-                                    if (vis[nextNextNode] != int(pr.first)) {
-                                        vis[nextNextNode] = pr.first;
+                                    if (vis[0][nextNextNode] != int(pr.first)) {
+                                        vis[0][nextNextNode] = pr.first;
                                         node2Adj[v].emplace_back(nextNextNode);
                                     }
                                 }
@@ -854,12 +968,12 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr, int curMatId
                 QueryResult qrCur(nullptr, false), qrNext(nullptr, false);
                 qrCur.tryNew();
                 qrCur.csrPtr->n = 1;
-                clearVis();
+                clearVis(NUMSTATES - 1);
                 for (const auto &pr : qrFull.csrPtr->v2idx) {
                     size_t v = pr.first, vIdx = pr.second;
                     size_t adjStart = qrFull.csrPtr->offset[vIdx], adjEnd = vIdx < qrFull.csrPtr->n - 1 ? qrFull.csrPtr->offset[vIdx + 1] : qrFull.csrPtr->adj.size();
                     for (size_t i = adjStart; i < adjEnd; i++)
-                        vis[qrFull.csrPtr->adj[i]] = v;
+                        vis[0][qrFull.csrPtr->adj[i]] = v;
                     // Re-initialize qrOneNode & qrCur
                     qrOneNode.csrPtr->v2idx.clear();
                     qrOneNode.csrPtr->v2idx[v] = 0;
@@ -880,8 +994,8 @@ const std::unordered_set<size_t> *rCandPtr, QueryResult *nlcResPtr, int curMatId
                             executeNode(curChildIdx[0], qrNext, nullptr, nullptr, &qrCur);
                         qrCur.csrPtr->adj.clear();
                         for (unsigned x : qrNext.csrPtr->adj) {
-                            if (vis[x] != int(v)) {
-                                vis[x] = v;
+                            if (vis[0][x] != int(v)) {
+                                vis[0][x] = v;
                                 qrOneNode.csrPtr->adj.emplace_back(x);
                                 qrCur.csrPtr->adj.emplace_back(x);
                             }
@@ -922,17 +1036,14 @@ float AndOrDag::approxMiddleDivInMonteCarlo(const std::vector<LabelOrInverse> &e
             continue;
         size_t lblIdx = it->second;
         const MappedCSR *lblCsrPtr = nullptr;
-        if (!endLabel.inv) {
+        if (!endLabel.inv)
             lblCsrPtr = &(csrPtr->inCsr[lblIdx]);
-            inSz = csrPtr->inCsr[it->second].n;
-        }
-        else {
+        else
             lblCsrPtr = &(csrPtr->outCsr[lblIdx]);
-            inSz = csrPtr->outCsr[it->second].n;
-        }
+        inSz = lblCsrPtr->n;
         if (inSz == 0)
             continue;
-        size_t numExists = 0, curN = lblCsrPtr->n;
+        size_t numExists = 0;
         unordered_map<unsigned, unsigned>::const_iterator v2idxIt;
         // cout << endLabel.lbl;
         // if (endLabel.inv)
@@ -942,25 +1053,30 @@ float AndOrDag::approxMiddleDivInMonteCarlo(const std::vector<LabelOrInverse> &e
         if (!curDfaPtr) {
             Rpq2NFAConvertor cvrt;
             curDfaPtr = cvrt.convert(idx2q[nodeIdx])->convert2Dfa();
+            assert(curDfaPtr->states.size() < NUMSTATES);   // NUMSTATES - 1 is used for other purposes
         }
-        curDfaPtr->clearVis(csrPtr->maxNode + 1);
-        if (SAMPLESZ >= curN) {
+        if (!curDfaPtr->vis)
+            curDfaPtr->setVis(this->vis);
+        // curDfaPtr->clearVis(csrPtr->maxNode + 1);    // if remove just for test efficiency, will segfault, need outside new once help
+        if (SAMPLESZ >= inSz) {
             for (const auto &pr : lblCsrPtr->v2idx) {
                 size_t curSrc = pr.first;
-                if (curDfaPtr->checkIfValidSrc(curSrc, csrPtr))
+                if (curDfaPtr->checkIfValidSrc(curSrc, csrPtr, curVisMark))
                     numExists++;
+                curVisMark++;
             }
             middleDivIn += float(numExists) / float(inSz);
         } else {
             for (size_t i = 0; i < SAMPLESZ; i++) {
-                size_t curIdx = rand() % curN;  // TODO: no putting back?
+                size_t curIdx = rand() % inSz;  // TODO: no putting back?
                 v2idxIt = lblCsrPtr->v2idx.begin();
                 std::advance(v2idxIt, curIdx);
                 size_t curSrc = v2idxIt->first;
-                if (curDfaPtr->checkIfValidSrc(curSrc, csrPtr))
+                if (curDfaPtr->checkIfValidSrc(curSrc, csrPtr, curVisMark))
                     numExists++;
+                curVisMark++;
             }
-            middleDivIn += float(numExists) / float(SAMPLESZ) * float(curN) / float(inSz);
+            middleDivIn += float(numExists) / float(SAMPLESZ);
         }
     }
     return middleDivIn;

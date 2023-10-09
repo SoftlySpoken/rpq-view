@@ -305,13 +305,12 @@ void NFA::reverse() {
 }
 
 // DFS execution, return true as soon as a result is found
-bool NFA::checkIfValidSrc(size_t dataNode, std::shared_ptr<const MultiLabelCSR> csrPtr) {
+bool NFA::checkIfValidSrc(size_t dataNode, std::shared_ptr<const MultiLabelCSR> csrPtr, int curVisMark) {
     stack<pair<unsigned, shared_ptr<State>>> st;
     shared_ptr<State> s0 = this->initial;
     unsigned v, nextV;
     shared_ptr<State> s;
     AdjInterval aitv;
-    unsigned sNode = 0;
     st.emplace(dataNode, s0);
     pair<unsigned, shared_ptr<State>> pr;
     unordered_map<double, size_t>::const_iterator it;
@@ -335,10 +334,10 @@ bool NFA::checkIfValidSrc(size_t dataNode, std::shared_ptr<const MultiLabelCSR> 
                         return true;
                     for (size_t j = 0; j < aitv.len; j++) {
                         nextV = (*aitv.start)[aitv.offset + j];
-                        if (vis[dst->id][nextV] != int(sNode)) {
+                        if (vis[dst->id][nextV] != curVisMark) {
                             // cout << v << ',' << nextV << ',' << dst->id << ' ';
                             st.emplace(nextV, dst);
-                            vis[dst->id][nextV] = sNode;
+                            vis[dst->id][nextV] = curVisMark;
                         }
                     }
                 }
@@ -349,10 +348,10 @@ bool NFA::checkIfValidSrc(size_t dataNode, std::shared_ptr<const MultiLabelCSR> 
                         return true;
                     for (size_t j = 0; j < aitv.len; j++) {
                         nextV = (*aitv.start)[aitv.offset + j];
-                        if (vis[dst->id][nextV] != int(sNode)) {
+                        if (vis[dst->id][nextV] != curVisMark) {
                             // cout << v << ',' << nextV << ',' << dst->id << ' ';
                             st.emplace(nextV, dst);
-                            vis[dst->id][nextV] = sNode;
+                            vis[dst->id][nextV] = curVisMark;
                         }
                     }
                 }

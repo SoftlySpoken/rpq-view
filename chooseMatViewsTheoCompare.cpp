@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
         cout << "Execute mode." << endl;
         execute = true;
     }
-    QueryResult qr(nullptr, false);
+    // QueryResult qr(nullptr, false);
     float naiveTime = 0;
     vector<float> viewTimeVec(numModes, 0);
 
@@ -62,19 +62,24 @@ int main(int argc, char **argv) {
     std::cout << "Plan time: " << elapsed_microseconds.count() / 1000.0 << " ms" << std::endl;
     if (execute) {
         for (const auto &p: q2freq) {
+            QueryResult qr(nullptr, false);
             start_time = std::chrono::steady_clock::now();
             aod.execute(p.first, qr);
             end_time = std::chrono::steady_clock::now();
             elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
             // std::cout << p.first << " " << elapsed_microseconds.count() << std::endl;
             naiveTime += elapsed_microseconds.count() * float(p.second);
+            if (qr.newed)
+                delete qr.csrPtr;
         }
     }
     std::cout << "Naive execution time: " << naiveTime << " us" << std::endl;
 
     // Choose materialized views
     float curCostReduction = 0;
-    for (size_t i = 0; i < numModes; i++) {
+    vector<size_t> modesVec({2, 4, 5});
+    for (size_t i : modesVec) {
+    // for (size_t i = 1; i < numModes; i++) {
         AndOrDag tmpAod(aod);
         start_time = std::chrono::steady_clock::now();
         curCostReduction = tmpAod.chooseMatViews(i, usedSpace, budget);
@@ -84,11 +89,14 @@ int main(int argc, char **argv) {
         // For each selection method, get the overall cost reduction; print the selected views and the cost reduction
         cout << i << " " << (unsigned long long)(curCostReduction) << " " << usedSpace << endl;
         const auto &q2idx = tmpAod.getQ2idx();
+        size_t numMatViews = 0;
         for (const auto &pr : q2idx) {
-            if (tmpAod.isMaterialized(pr.second) && !tmpAod.getNodes()[pr.second].getChildIdx().empty())
+            if (tmpAod.isMaterialized(pr.second) && !tmpAod.getNodes()[pr.second].getChildIdx().empty()) {
                 cout << pr.first << " ";
+                numMatViews++;
+            }
         }
-        cout << endl;
+        cout << endl << numMatViews << endl;
         if (execute) {
             start_time = std::chrono::steady_clock::now();
             tmpAod.materialize();
@@ -96,12 +104,15 @@ int main(int argc, char **argv) {
             elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
             std::cout << "Materialize views time: " << elapsed_microseconds.count() << " us" << std::endl;
             for (const auto &p: q2freq) {
+                QueryResult qr(nullptr, false);
                 start_time = std::chrono::steady_clock::now();
                 tmpAod.execute(p.first, qr);
                 end_time = std::chrono::steady_clock::now();
                 elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
                 // std::cout << p.first << " " << elapsed_microseconds.count() << std::endl;
                 viewTimeVec[i] += elapsed_microseconds.count() * float(p.second);
+                if (qr.newed)
+                    delete qr.csrPtr;
             }
             std::cout << "Mode " << i << " execution time: " << viewTimeVec[i] << " us" << std::endl;
         }

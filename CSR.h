@@ -68,6 +68,10 @@ struct QueryResult {
     bool newed;
     bool hasEpsilon;    // include all (v, v) pairs, not explictly represented
     QueryResult(MappedCSR *csrPtr_, bool newed_): csrPtr(csrPtr_), newed(newed_), hasEpsilon(false) {}
+    // ~QueryResult() {
+    //     if (newed)
+    //         delete csrPtr;
+    // }
     void assignAsUnion(const std::vector<QueryResult> &qrList);
     void assignAsJoin(const QueryResult &qrLeft, const QueryResult &qrRight);
     void assignAsEmpty() {

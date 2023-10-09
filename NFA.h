@@ -62,19 +62,24 @@ struct NFA
     void reverse();
 
     int **vis;
+    bool outerVis;
     std::shared_ptr<MappedCSR> execute(std::shared_ptr<const MultiLabelCSR> csrPtr);
-    bool checkIfValidSrc(size_t dataNode, std::shared_ptr<const MultiLabelCSR> csrPtr);
+    bool checkIfValidSrc(size_t dataNode, std::shared_ptr<const MultiLabelCSR> csrPtr, int curVisMark);
     void clearVis(unsigned gN);
 
-    NFA(): curMaxId(0), vis(nullptr) {
+    NFA(): curMaxId(0), vis(nullptr), outerVis(false) {
         initial = addState(true);
         setAccept(initial);
     }
     ~NFA() {
-        if (vis) {
+        if (vis && !outerVis) {
             for (unsigned i = 0; i < states.size(); i++)
                 delete []vis[i];
             delete []vis;
         }
+    }
+    void setVis(int **vis_) {
+        vis = vis_;
+        outerVis = true;
     }
 };

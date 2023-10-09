@@ -2,6 +2,7 @@
 #include "CSR.h"
 #include "Rpq2NFAConvertor.h"
 #define SAMPLESZ 10
+#define NUMSTATES 20
 
 struct LabelOrInverse {
     double lbl;
@@ -60,34 +61,58 @@ class AndOrDag {
     // Cardinality stuff
     std::vector<size_t> srcCnt, dstCnt;
     std::vector<size_t> card;
-    std::vector<size_t> useCnt; // useCnt assumes the current subquery is used whenever possible, UB on any actual case
-    // std::vector<float> pairProb;
-
-    // View results
-    std::vector<std::shared_ptr<MappedCSR>> res;
+    std::vector<size_t> freq; // UB on any actual useCnt
+    std::vector<int> useCnt;    // actual useCnt, int for easier subtraction
 
     std::shared_ptr<MultiLabelCSR> csrPtr;
 
-    int *vis;
+    int **vis;
+    int curVisMark;
 
 public:
-    AndOrDag(): csrPtr(nullptr), vis(nullptr) {}
-    AndOrDag(std::shared_ptr<MultiLabelCSR> csrPtr_): csrPtr(csrPtr_), vis(nullptr) { clearVis(); }
-    void clearVis() {
-        size_t gN = csrPtr->maxNode + 1;
-        if (!vis)
-            vis = new int[gN];
-        memset(vis, -1, sizeof(int) * gN);
+    AndOrDag(): csrPtr(nullptr), vis(nullptr), curVisMark(INT_MIN) {}
+    AndOrDag(std::shared_ptr<MultiLabelCSR> csrPtr_): csrPtr(csrPtr_), vis(nullptr), curVisMark(INT_MIN) { clearVis(); }
+    AndOrDag(const AndOrDag &aod_): nodes(aod_.nodes), q2idx(aod_.q2idx), idx2q(aod_.idx2q), materialized(aod_.materialized),
+    cost(aod_.cost), workloadFreq(aod_.workloadFreq), srcCnt(aod_.srcCnt), dstCnt(aod_.dstCnt), card(aod_.card), freq(aod_.freq),
+    useCnt(aod_.useCnt), csrPtr(aod_.csrPtr), vis(nullptr), curVisMark(INT_MIN) {
+        // Copy constructor avoid vis double delete
+        clearVis();
     }
-    void addWorkloadQuery(const std::string &q, size_t freq);   // Add the query q to the dag and mark as workload query
+    ~AndOrDag() {
+        if (vis) {
+            for (size_t j = 0; j < NUMSTATES; j++)
+                delete []vis[j];
+            delete []vis;
+        }
+    }
+    void clearVis(int idx=-1) {
+        size_t gN = csrPtr->maxNode + 1;
+        if (!vis) {
+            vis = new int *[NUMSTATES];
+            for (size_t j = 0; j < NUMSTATES; j++) {
+                vis[j] = new int [gN];
+                if (idx == -1 || j == size_t(idx))
+                    memset(vis[j], -1, gN * sizeof(int));
+            }
+        } else {
+            if (idx == -1) {
+                for (size_t j = 0; j < NUMSTATES; j++)
+                    memset(vis[j], -1, gN * sizeof(int));
+            } else
+                memset(vis[idx], -1, gN * sizeof(int));
+        }
+    }
+    void addWorkloadQuery(const std::string &q, size_t curFreq);   // Add the query q to the dag and mark as workload query
     int addQuery(const std::string &q);   // Add the query q to the dag
     void initAuxiliary();   // Call after finished constructing the dag
     void annotateLeafCostCard(); // Annotate leaf nodes' srcCnt, dstCnt, pairProb, cost
     float chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget=std::numeric_limits<size_t>::max(), std::string *testOut=nullptr);
     void plan();    // Plan the execution of the dag
-    void propagateUseCnt(size_t idx); // Propagate useCnt from the current node
+    void propagate();
+    void propagateFreq(size_t idx, size_t propVal); // Propagate freq from the current node
+    void propagateUseCnt(size_t idx, int delta);    // Propagate useCnt change from the current node
     void replanWithMaterialize(const std::vector<size_t> &matIdx, std::unordered_map<size_t, float> &node2cost, float &reducedCost); // Replan the dag assuming the input views are materialized
-    void applyChanges(const std::unordered_map<size_t, float> &node2cost);    // Apply the changes from replan to the dag
+    void applyChanges(const std::vector<size_t> &matIdx, const std::unordered_map<size_t, float> &node2cost, bool updateUseCnt=false);    // Apply the changes from replan to the dag
     void updateNodeCost(size_t nodeIdx, std::unordered_map<size_t, float> &node2cost, float &reducedCost, float updateCost=-1); // Update the cost of a node (and its ancestors); -1 means update to cardinality
     void planNode(size_t nodeIdx);
     void materialize(); // Materialize the chosen views
@@ -100,6 +125,7 @@ public:
 
     void addNode(bool isEq_, char opType_) {
         nodes.emplace_back(isEq_, opType_);
+        freq.emplace_back(0);
         useCnt.emplace_back(0);
         workloadFreq.emplace_back(0);
     }
@@ -108,7 +134,7 @@ public:
         auto it = q2idx.find(q);
         if (it == q2idx.end())
             return;
-        useCnt[it->second] = useCnt_;
+        freq[it->second] = useCnt_;
         if (workloadFreq_ != -1)
             workloadFreq[it->second] = workloadFreq_;
         else
@@ -125,7 +151,9 @@ public:
     const std::vector<size_t> &getCard() const { return card; }
     const std::vector<float> &getCost() const { return cost; }
     std::vector<size_t> &getWorkloadFreq() { return workloadFreq; }
-    std::vector<size_t> &getUseCnt() { return useCnt; }
+    std::vector<size_t> &getFreq() { return freq; }
+    std::vector<int> &getUseCnt() { return useCnt; }
+    std::vector<bool> &getMaterialized() { return materialized; }
     void setSrcCnt(size_t idx, size_t srcCnt_) { srcCnt[idx] = srcCnt_; }
     void setDstCnt(size_t idx, size_t dstCnt_) { dstCnt[idx] = dstCnt_; }
     void setCost(size_t idx, float cost_) { cost[idx] = cost_; }

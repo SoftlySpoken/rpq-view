@@ -161,6 +161,7 @@ protected:
         string inputFileName = dataDir + "KleeneIriConcatTest_input.txt";
         buildAndOrDagFromFile(aod, inputFileName);
         aod.initAuxiliary();
+        aod.getFreq().assign(aod.getNumNodes(), 0);
         aod.getUseCnt().assign(aod.getNumNodes(), 0);
         string costFileName = dataDir + "KleeneIriConcatTest_cost.txt";
         std::ifstream costFile(costFileName);
@@ -229,6 +230,91 @@ TEST(AddQueryTestSuite, OverlapTest) {
     CustomTest("OverlapTest");
 }
 
+TEST(UseCntTestSuite, TwoRootsTest) {
+    string dataDir = "../test_data/UseCntTestSuite/", testName = "TwoRootsTest";
+    std::string inputFileName = dataDir + testName + "_input.txt";
+    std::string expectedOutputFileName = dataDir + testName + "_expected_output.txt";
+    
+    AndOrDag aod;
+    string q;
+    size_t freq;
+    std::ifstream inputFile(inputFileName);
+    ASSERT_EQ(inputFile.is_open(), true);
+    while (inputFile >> q >> freq)
+        aod.addWorkloadQuery(q, freq);
+    inputFile.close();
+    aod.getNodes()[0].setTargetChild(1);
+    aod.getNodes()[10].setTargetChild(11);
+    aod.getMaterialized().assign(aod.getNodes().size(), false);
+    // Simulate the propagation of freq
+    aod.propagate();
+
+    vector<size_t> realFreq;
+    ifstream expectedOutputFile(expectedOutputFileName);
+    ASSERT_EQ(expectedOutputFile.is_open(), true);
+    while (expectedOutputFile >> freq)
+        realFreq.emplace_back(freq);
+    ASSERT_EQ(aod.getFreq().size(), realFreq.size());
+    for (size_t i = 0; i < realFreq.size(); i++)
+        EXPECT_EQ(aod.getFreq()[i], realFreq[i]);
+}
+
+void useCntTest(const std::string& testName) {
+    string dataDir = "../test_data/UseCntTestSuite/";
+    std::string inputFileName = dataDir + testName + "_input.txt";
+    std::string expectedOutputFileName = dataDir + testName + "_expected_output.txt";
+    
+    AndOrDag aod;
+    string q;
+    size_t freq;
+    std::ifstream inputFile(inputFileName);
+    ASSERT_EQ(inputFile.is_open(), true);
+    while (inputFile >> q >> freq)
+        aod.addWorkloadQuery(q, freq);
+    inputFile.close();
+    aod.getNodes()[0].setTargetChild(1);
+    aod.getMaterialized().assign(aod.getNodes().size(), false);
+    // Simulate the propagation of freq
+    aod.propagate();
+    vector<vector<int>> useCntVec;
+    useCntVec.emplace_back(aod.getUseCnt());
+
+    aod.propagateUseCnt(1, -1);
+    aod.getNodes()[0].setTargetChild(7);
+    aod.propagateUseCnt(7, 1);
+    size_t tmpUseCnt = aod.getUseCnt()[8];
+    aod.propagateUseCnt(8, 0 - tmpUseCnt);
+    aod.getUseCnt()[8] = tmpUseCnt;
+    aod.getMaterialized()[8] = true;
+    useCntVec.emplace_back(aod.getUseCnt());
+
+    tmpUseCnt = aod.getUseCnt()[0];
+    aod.propagateUseCnt(0, 0 - tmpUseCnt);
+    aod.getUseCnt()[0] = tmpUseCnt;
+    aod.getMaterialized()[0] = true;
+    useCntVec.emplace_back(aod.getUseCnt());
+
+    ifstream expectedOutputFile(expectedOutputFileName);
+    ASSERT_EQ(expectedOutputFile.is_open(), true);
+    size_t numElems = 0;
+    expectedOutputFile >> numElems;
+    for (size_t i = 0; i < 3; i++) {
+        ASSERT_EQ(useCntVec[i].size(), numElems);
+        for (size_t j = 0; j < numElems; j++) {
+            expectedOutputFile >> tmpUseCnt;
+            EXPECT_EQ(useCntVec[i][j], tmpUseCnt);
+        }
+    }
+}
+
+TEST(UseCntTestSuite, SingleRootInclusionTest) {
+    useCntTest("SingleRootInclusionTest");
+}
+
+TEST(UseCntTestSuite, SingleRootTest) {
+    useCntTest("SingleRootTest");
+}
+
 TEST(AnnotateLeafCostCardTestSuite, SimpleTest) {
     // Construct outCsr, inCsr for 0-[0]->1-[1]->2-[2]->3-[3]->4
     auto csrPtr = make_shared<MultiLabelCSR>();
@@ -289,6 +375,7 @@ TEST(PlanTestSuite, KleeneIriConcatTest) {
     string inputFileName = dataDir + "KleeneIriConcatTest_input.txt";
     buildAndOrDagFromFile(aod, inputFileName);
     aod.initAuxiliary();
+    aod.getFreq().assign(aod.getNumNodes(), 0);
     aod.getUseCnt().assign(aod.getNumNodes(), 0);
     aod.annotateLeafCostCard();
     string queryFileName = dataDir + "KleeneIriConcatTest_query.txt";
@@ -346,6 +433,7 @@ TEST(ReplanWithMaterializeTestSuite, KleeneIriConcatTest) {
     string inputFileName = dataDir + "KleeneIriConcatTest_input.txt";
     buildAndOrDagFromFile(aod, inputFileName);
     aod.initAuxiliary();
+    aod.getFreq().assign(aod.getNumNodes(), 0);
     aod.getUseCnt().assign(aod.getNumNodes(), 0);
     string costFileName = dataDir + "KleeneIriConcatTest_cost.txt";
     std::ifstream costFile(costFileName);
@@ -381,6 +469,7 @@ TEST(ReplanWithMaterializeTestSuite, KleeneIriConcatTest) {
         ASSERT_EQ(it != aod.getQ2idx().end(), true);
         matIdx.emplace_back(it->second);
     }
+    vector<size_t> vIdxAdded, vIdxRemoved;
     aod.replanWithMaterialize(matIdx, node2cost, reducedCost);
 
     // Compare the actual result with the expected result
