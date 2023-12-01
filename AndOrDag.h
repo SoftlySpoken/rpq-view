@@ -1,7 +1,7 @@
 #pragma once
 #include "CSR.h"
 #include "Rpq2NFAConvertor.h"
-#define SAMPLESZ 10
+#define SAMPLESZ 100
 #define NUMSTATES 20
 
 struct LabelOrInverse {

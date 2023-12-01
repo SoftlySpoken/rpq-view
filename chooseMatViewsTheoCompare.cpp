@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
 
     // Choose materialized views
     float curCostReduction = 0;
-    vector<size_t> modesVec({2, 4, 5});
+    vector<size_t> modesVec({5});
     for (size_t i : modesVec) {
     // for (size_t i = 1; i < numModes; i++) {
         AndOrDag tmpAod(aod);
@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
                 tmpAod.execute(p.first, qr);
                 end_time = std::chrono::steady_clock::now();
                 elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-                // std::cout << p.first << " " << elapsed_microseconds.count() << std::endl;
+                std::cout << p.first << " " << elapsed_microseconds.count() << std::endl;
                 viewTimeVec[i] += elapsed_microseconds.count() * float(p.second);
                 if (qr.newed)
                     delete qr.csrPtr;

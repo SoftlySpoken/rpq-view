@@ -148,7 +148,10 @@ int main(int argc, char **argv) {
             if (it == aod.getQ2idx().end())
                 continue;
             size_t curIdx = it->second;
+            unordered_map<size_t, float> node2cost;
+            float reducedCost = 0;
             start_time = std::chrono::steady_clock::now();
+            aod.replanWithMaterialize({curIdx}, node2cost, reducedCost);
             aod.executeNode(curIdx, aod.getNodes()[curIdx].getRes(), nullptr, nullptr, nullptr, curIdx);
             end_time = std::chrono::steady_clock::now();
             elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
