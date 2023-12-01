@@ -1,6 +1,6 @@
 /**
  * @file chooseMatViewsTheoCompare.cpp
- * @author Yue Pang (michelle.py@pku.edu.cn)
+ * @author Yue Pang 
  * @brief Compare the theoretical (estimated) workload cost betweewn different view selection methods
  * @date 2023-09-11
  */

@@ -1,6 +1,6 @@
 /**
  * @file matMostFrequent.cpp
- * @author Yue Pang (michelle.py@pku.edu.cn)
+ * @author Yue Pang 
  * @brief Materialize the most frequent workload queries' results until the actual memory usage
  * exceeds a threshold (determined by human inspecting the top console) - 192 GB
  * @date 2023-10-10

@@ -1,6 +1,6 @@
 /**
  * @file NFA.cpp
- * @author Yue Pang (michelle.py@pku.edu.cn)
+ * @author Yue Pang 
  * @brief Implements methods in NFA.h
  * @date 2022-08-24
  */

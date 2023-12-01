@@ -1,6 +1,6 @@
 /**
  * @file NFA.h
- * @author Yue Pang (michelle.py@pku.edu.cn)
+ * @author Yue Pang 
  * @brief Nondeterministic finite automaton
  * @date 2022-08-24
  */

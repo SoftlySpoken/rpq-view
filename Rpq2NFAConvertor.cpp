@@ -1,6 +1,6 @@
 /**
  * @file Rpq2NFAConvertor.cpp
- * @author Yue Pang (michelle.py@pku.edu.cn)
+ * @author Yue Pang 
  * @brief Implements methods in Rpq2NFAConvertor.h
  * @date 2022-08-24
  */

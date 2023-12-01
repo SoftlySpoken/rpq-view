@@ -1,6 +1,6 @@
 /**
  * @file Rpq2NFAConvertor.h
- * @author Yue Pang (michelle.py@pku.edu.cn)
+ * @author Yue Pang 
  * @brief Converts RPQ to NFA
  * @date 2022-08-24
  */
