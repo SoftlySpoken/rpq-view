@@ -11,8 +11,13 @@ $ cmake --build build -j
 
 ## Obtaining the data
 
-The dataset we used is too large to upload to GitHub. We are looking for an anonymized platform to host it. [UPCOMING]
+The dataset we used is too large to upload to GitHub. It can be downloaded [here](https://www.jianguoyun.com/p/DRVlc_MQ0J6KCxjF9qYFIAA). Please decompress it and copy the contents to a newly created directory `real_data/` under the cwd `rpq-view/`:
 
+```
+$ tar -xzvf wikidata.tar.gz
+$ mkdir real_data
+$ mv wikidata/ real_data/
+```
 
 
 ## Running the code
