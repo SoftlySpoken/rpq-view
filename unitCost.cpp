@@ -274,9 +274,6 @@ void getBestSplit(rpqParser::PathContext *path, vector<string> &splitParts, std:
             splitPoints[curIdx]++;
             for (size_t i = curIdx + 1; i < curThreadNum - 1; i++)
                 splitPoints[i] = splitPoints[i-1] + 1;
-            // for (size_t i = 0; i < curThreadNum - 1; i++)
-            //     cout << splitPoints[i] << " ";
-            // cout << endl;
         } while (true);
     }
     splitParts.swap(curSplitParts);
@@ -314,7 +311,6 @@ int main() {
     // Read workload queries
     string dataDir = "../real_data/";
     string graphName = "wikidata";
-    // string graphName = "example";
     string queryFilePath = dataDir + graphName + "/queries.txt";
     ifstream fin(queryFilePath);
     unordered_set<string> qSet;
@@ -341,7 +337,6 @@ int main() {
         rpqParser::PathContext *path = parser.path();
         string cleanQuery = removeRedundantParen(path);
         qMap[cleanQuery] = vector<string>();
-        // cout << query << " " << cleanQuery << endl;
     }
 
     // Identify cases that cannot be decomposed: the whole query is a Kleene closure,
@@ -528,14 +523,6 @@ int main() {
                         outQr.assignAsJoin(lQr, rQr);
                         resPtrVec[i+1].reset(outQr.csrPtr);
                     }
-                    // Test result correctness using MappedCSR == (already tested on example graph with <1>/<2>/<3>/<3>, split in the middle)
-                    // shared_ptr<NFA> dfaPtr = cvrt.convert(subquery)->convert2Dfa();
-                    // shared_ptr<MappedCSR> res = dfaPtr->execute(csrPtr);
-                    // if (*res == *resPtrVec[numSplitParts-1])
-                    //     cout << "Correct result" << endl;
-                    // else
-                    //     cout << "Incorrect result" << endl;
-
                     inner_end_time = std::chrono::steady_clock::now();
                     subExeTime = std::chrono::duration_cast<std::chrono::microseconds>(inner_end_time - inner_start_time);
                 } else {

@@ -456,3 +456,255 @@ void NFA::clearVis(unsigned gN) {
             memset(vis[j], -1, gN * sizeof(int));
     }
 }
+
+// Helper function to add a pair to the map if not exists (return true if added, false if already exists), and return the id as output param
+bool checkAddPair(size_t v1, size_t v2, unordered_map<size_t, unordered_map<size_t, size_t>> &ump, size_t &curMaxId, size_t &id) {
+    bool ret = true;
+    auto it = ump.find(v1);
+    if (it == ump.end()) {
+        ump[v1] = unordered_map<size_t, size_t>();
+        id = curMaxId;
+        ump[v1][v2] = curMaxId++;
+    } else {
+        auto it2 = it->second.find(v2);
+        if (it2 == it->second.end()) {
+            id = curMaxId;
+            ump[v1][v2] = curMaxId++;
+        } else {
+            id = it2->second;
+            ret = false;
+        }
+    }
+    return ret;
+}
+
+LineGraph LineGraph::operator * (const LineGraph &lg) const {
+    LineGraph prod;
+
+    size_t numNodesL = this->nodeLabel.size(), numNodesR = lg.nodeLabel.size();
+    size_t numNodesProd = 0;
+    unordered_map<size_t, unordered_map<size_t, size_t>> pair2prodNode;
+    for (size_t v1 = 0; v1 < numNodesL; v1++) {
+        for (size_t v2 = 0; v2 < numNodesR; v2++) {
+            if (this->nodeLabel[v1] != lg.nodeLabel[v2])
+                continue;
+            for (size_t jl = 0; jl < this->outAdj[v1].size(); jl++) {
+                for (size_t jr = 0; jr < lg.outAdj[v2].size(); jr++) {
+                    size_t u1 = this->outAdj[v1][jl], u2 = lg.outAdj[v2][jr];
+                    if (this->outLabel[v1][jl] != lg.outLabel[v2][jr] || this->nodeLabel[u1] != lg.nodeLabel[u2])
+                       continue;
+                    // Nodes will not be added if no edge
+                    size_t srcId = 0, dstId = 0;
+                    bool added = false;
+                    added = checkAddPair(v1, v2, pair2prodNode, numNodesProd, srcId);
+                    if (added)
+                        prod.addNode(this->nodeLabel[v1]);
+                    added = checkAddPair(u1, u2, pair2prodNode, numNodesProd, dstId);
+                    if (added)
+                        prod.addNode(this->nodeLabel[u1]);
+                    prod.addEdge(srcId, dstId, this->outLabel[v1][jl]);
+                }
+            }
+        }
+    }
+    if (prod.nodeLabel.empty() || prod.outAdj.empty())
+        return prod;    // Early stop, skip the weak connections part
+
+    return prod;
+}
+
+// 0: no nodes / no edges / no non-weak edges, 1: clique, 2: otherwise
+int LineGraph::getType() const {
+    if (nodeLabel.empty() || outAdj.empty())
+        return 0;
+    bool nonWeak = false;
+    size_t outAdjSz = outAdj.size();
+    for (size_t i = 0; i < outAdjSz; i++) {
+        for (size_t j = 0; j < outAdj[i].size(); j++) {
+            if (outLabel[i][j] != 0) {
+                nonWeak = true;
+                break;
+            }
+        }
+        if (nonWeak)
+            break;
+    }
+    if (!nonWeak)
+        return 0;
+    
+    // Check clique
+    // TODO: > 1 connected component, each a clique, is also counted as a clique here
+    size_t numNodes = outLabel.size();
+    if (numNodes == 1)
+        return 1;   // 1 node is a clique with or without self-loop
+    bool isClique = true;
+    for (size_t i = 0; i < numNodes; i++) {
+        unordered_set<int> neighbors;
+        for (size_t j = 0; j < outAdj[i].size(); j++)
+            neighbors.emplace(outAdj[i][j]);
+        if (neighbors.size() != numNodes - 1) {
+            isClique = false;
+            break;
+        }
+    }
+    if (isClique)
+        return 1;
+
+    return 2;
+}
+
+void NFA::fillLineGraph() {
+    stack<shared_ptr<State>> st;
+    st.emplace(initial);
+    unordered_set<int> vis;
+    vis.emplace(initial->id);
+    while (!st.empty()) {
+        shared_ptr<State> cur = st.top();
+        st.pop();
+        for (const auto &oe : cur->outEdges) {
+            if (vis.find(oe.dst->id) == vis.end()) {
+                vis.emplace(oe.dst->id);
+                st.emplace(oe.dst);                
+            }
+            int u = lg.nodeLabel.size();
+            lg.nodeLabel.emplace_back(oe.lbl, oe.forward);
+            lg.outAdj.emplace_back();
+            lg.outLabel.emplace_back();
+            for (int v : cur->lineNodesFrom) {
+                lg.addEdge(u, v, 1);
+                lg.addEdge(v, u, 1);
+            }
+            for (int v : cur->lineNodesTo) {
+                lg.addEdge(u, v, 2);
+                lg.addEdge(v, u, 3);
+            }
+            for (int v : (oe.dst)->lineNodesFrom) {
+                lg.addEdge(u, v, 3);
+                lg.addEdge(v, u, 2);
+            }
+            for (int v : (oe.dst)->lineNodesTo) {
+                lg.addEdge(u, v, 4);
+                lg.addEdge(v, u, 4);
+            }
+            cur->lineNodesFrom.emplace_back(u);
+            (oe.dst)->lineNodesTo.emplace_back(u);
+        }
+    }
+}
+
+// Make sure the NFA is a DFA before calling
+std::shared_ptr<NFA> NFA::minimizeDfa() {
+    size_t numGroup = 2, numStates = states.size();
+    std::vector<size_t> state2part(states.size(), 0);
+    if (numStates == accepts.size())
+        numGroup = 1;
+    else {
+        for (const auto &s : accepts)
+            state2part[s->id] = 1;
+    }
+    size_t prevNumGroup = numGroup;
+    do {
+        prevNumGroup = numGroup;
+        for (size_t i = 0; i < numGroup; i++) {
+            unordered_map<int, size_t> nextGroup;    // Represent label -> group
+            bool addGroup = false;
+            for (size_t j = 0; j < numStates; j++) {
+                if (state2part[j] == i) {
+                    if (nextGroup.empty()) {
+                        for (const auto &oe : states[j]->outEdges) {
+                            int lblForward = oe.forward ? oe.lbl : -oe.lbl;
+                            nextGroup[lblForward] = state2part[(oe.dst)->id];
+                        }
+                    } else {
+                        bool needAdd = false;
+                        if (nextGroup.size() != states[j]->outEdges.size())
+                            needAdd = true;
+                        else {
+                            for (const auto &oe : states[j]->outEdges) {
+                                int lblForward = oe.forward ? oe.lbl : -oe.lbl;
+                                auto it = nextGroup.find(lblForward);
+                                if (it == nextGroup.end() || it->second != state2part[(oe.dst)->id]) {
+                                    needAdd = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (needAdd) {
+                            // All split into the same group, further split later, no impact on correctness (but may impact performance)
+                            if (addGroup)
+                                state2part[j] = numGroup - 1;
+                            else {
+                                state2part[j] = numGroup++;
+                                if (numGroup == numStates) {
+                                    // *this is already a minimal DFA
+                                    return make_shared<NFA>(*this);
+                                }
+                                addGroup = true;
+                            }
+                            continue;
+                        }
+                    }
+
+                    // for (const auto &oe : states[j]->outEdges) {
+                    //     int lblForward = oe.forward ? oe.lbl : -oe.lbl;
+                    //     auto it = nextGroup.find(lblForward);
+                    //     if (it == nextGroup.end())
+                    //         nextGroup[lblForward] = state2part[(oe.dst)->id];
+                    //     else if (it->second != state2part[(oe.dst)->id]) {
+                    //         // All split into the same group, further split later, no impact on correctness (but may impact performance)
+                    //         if (addGroup)
+                    //             state2part[j] = numGroup - 1;
+                    //         else {
+                    //             state2part[j] = numGroup++;
+                    //             addGroup = true;
+                    //         }
+                    //         // nextGroup[numGroup] = state2part[(oe.dst)->id];
+                    //         break;
+                    //     }
+                    // }
+                }
+            }
+        }
+    } while (prevNumGroup < numGroup);
+
+    // Add edges between groups
+    shared_ptr<NFA> ret = make_shared<NFA>();
+    ret->states.resize(numGroup);
+    for (size_t i = 0; i < numGroup; i++)
+        ret->states[i] = make_shared<State>(i, false);
+    for (size_t i = 0; i < numStates; i++) {
+        for (const auto &oe : states[i]->outEdges)
+            ret->states[state2part[i]]->addTransition(oe.lbl, oe.forward, ret->states[state2part[(oe.dst)->id]]);
+    }
+
+    // Initial & accept states
+    ret->initial = ret->states[state2part[initial->id]];
+    ret->unsetAccept();
+    for (const auto &s : accepts)
+        ret->setAccept(ret->states[state2part[s->id]]);
+    ret->curMaxId = numGroup;
+    return ret;
+}
+
+void NFA::removeSelfLoop() {
+    // For each self loop, create a new state to replace it
+    size_t numStates = states.size();
+    for (size_t i = 0; i < numStates; i++) {
+        shared_ptr<State> addedState = nullptr;
+        for (size_t j = 0; j < states[i]->outEdges.size(); j++) {
+            if (states[i]->outEdges[j].dst == states[i]) {
+                if (!addedState)
+                    addedState = addState();
+                addedState->addTransition(states[i]->outEdges[j].lbl, states[i]->outEdges[j].forward, states[i]);
+                states[i]->outEdges.erase(states[i]->outEdges.begin() + j);
+                j--;
+            }
+        }
+        if (addedState) {
+            for (const auto &oe : addedState->outEdges)
+                states[i]->addTransition(oe.lbl, oe.forward, addedState);
+            if (states[i]->accept)
+                setAccept(addedState);
+        }
+    }
+}

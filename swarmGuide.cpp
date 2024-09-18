@@ -9,6 +9,13 @@
 using namespace std;
 
 int main(int argc, char **argv) {
+    if (argc != 3) {
+		cout << "Usage: " << argv[0] << " <num_iter> <damping_factor>" << endl;
+		return 1;
+	}
+    int num_iter = atoi(argv[1]);
+	float damping_factor = atof(argv[2]);
+
     string inputFilePath;
     ifstream inputFile;
 
@@ -54,20 +61,32 @@ int main(int argc, char **argv) {
     elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     std::cout << "Plan time: " << elapsed_microseconds.count() / 1000.0 << " ms" << std::endl;
 
-    // Sort the workload queries by descending frequency
-    vector<pair<string, size_t>> qFreqVec(q2freq.begin(), q2freq.end());
-    sort(qFreqVec.begin(), qFreqVec.end(), [](const pair<string, size_t> &a, const pair<string, size_t> &b) {
-        return a.second > b.second;
-    });
+    // Read the ap views
+    vector<string> apViews;
+    string apPath = "ap_output/";
+    string apFilePath = apPath + "ap_" + to_string(num_iter) + "_" + to_string(damping_factor) + "-view-manual.txt";
+    ifstream apFile(apFilePath);
+    int clusterSz;
+    while (apFile >> clusterSz) {
+        if (clusterSz < 0)
+            getline(apFile, q);
+        else if (clusterSz == 0)
+            continue;
+        else {
+            apFile >> clusterSz;
+            for (size_t i = 0; i < clusterSz; i++)
+                apFile >> q;
+            apFile >> q;
+            if (q[0] != 'N')
+                apViews.emplace_back(q);
+        }
+    }
 
-    // Materialize the most frequent workload queries' results until the actual memory usage
-    // exceeds a threshold (determined by human inspecting the top console)
+    // Materialize the ap views
     float matTime = 0;
-    string curInput = "";
-    size_t i = 0, curIdx = 0;
-    do {
-        cout << qFreqVec[i].first << endl;
-        it = aod.getQ2idx().find(qFreqVec[i].first);
+    size_t curIdx = 0;
+    for (const string &v : apViews) {
+        it = aod.getQ2idx().find(v);
         if (it == aod.getQ2idx().end())
             continue;
         curIdx = it->second;
@@ -77,20 +96,13 @@ int main(int argc, char **argv) {
         elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
         aod.getMaterialized()[curIdx] = true;
         matTime += elapsed_microseconds.count();
-        i++;
-        cin >> curInput;
-    } while (curInput != "STOP" && i < qFreqVec.size());
-    if (i < qFreqVec.size()) {
-        aod.getMaterialized()[curIdx] = false;  // Tell the DAG not to use the last materialized result causing the memory to exceed
-        matTime -= elapsed_microseconds.count();
     }
 
     // Execute the workload queries
     float queryTime = 0;
-    for (const auto &p: qFreqVec) {
+    for (const auto &p: q2freq) {
         QueryResult qr(nullptr, false);
         start_time = std::chrono::steady_clock::now();
-        std::cout << p.first << " ";
         aod.execute(p.first, qr);
         end_time = std::chrono::steady_clock::now();
         elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);

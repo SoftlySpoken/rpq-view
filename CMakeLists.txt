@@ -27,8 +27,18 @@ add_executable(
   parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
 )
 add_executable(
-  chooseMatViewsTheoCompare
-  chooseMatViewsTheoCompare.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
+  ours
+  ours.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
+  parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
+)
+add_executable(
+  varyWorkloadSz
+  varyWorkloadSz.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
+  parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
+)
+add_executable(
+  varyMemBudget
+  varyMemBudget.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
   parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
 )
 add_executable(
@@ -41,16 +51,45 @@ add_executable(
   matMostFrequent.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
   parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
 )
+add_executable(
+  unitCost
+  unitCost.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
+  parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
+)
+add_executable(ap affinity_propagation.cpp)
+add_executable(
+  productGraphQueryBatch
+  productGraphQueryBatch.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
+  parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
+)
+add_executable(
+  swarmGuide
+  swarmGuide.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
+  parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
+)
 target_include_directories(AndOrDagTest PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
-target_include_directories(chooseMatViewsTheoCompare PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(ours PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(varyWorkloadSz PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(varyMemBudget PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
 target_include_directories(CompareAndOrDagDfa PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
 target_include_directories(matMostFrequent PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(unitCost PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(productGraphQueryBatch PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(swarmGuide PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
 target_link_libraries(
   AndOrDagTest
   PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a GTest::gtest_main OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
-  chooseMatViewsTheoCompare
+  ours
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
+)
+target_link_libraries(
+  varyWorkloadSz
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
+)
+target_link_libraries(
+  varyMemBudget
   PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
@@ -61,10 +100,27 @@ target_link_libraries(
   matMostFrequent
   PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
+target_link_libraries(
+  unitCost
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
+)
+target_link_libraries(
+  productGraphQueryBatch
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a ${TBB_IMPORTED_TARGETS}
+)
+target_link_libraries(
+  swarmGuide
+  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a ${TBB_IMPORTED_TARGETS}
+)
 target_compile_options(AndOrDagTest PRIVATE -g -Wall -std=c++17 -DTEST $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
-target_compile_options(chooseMatViewsTheoCompare PRIVATE -g -Wall -std=c++17 -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
+target_compile_options(ours PRIVATE -g -Wall -std=c++17 -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
+target_compile_options(varyWorkloadSz PRIVATE -g -Wall -std=c++17 -O0 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
+target_compile_options(varyMemBudget PRIVATE -g -Wall -std=c++17 -O0 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
 target_compile_options(CompareAndOrDagDfa PRIVATE -g -Wall -std=c++17 -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
 target_compile_options(matMostFrequent PRIVATE -g -Wall -std=c++17 -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
+target_compile_options(unitCost PRIVATE -g -Wall -std=c++17 -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
+target_compile_options(productGraphQueryBatch PRIVATE -g -Wall -std=c++17)
+target_compile_options(swarmGuide PRIVATE -g -Wall -std=c++17 -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
 
 include(GoogleTest)
 gtest_discover_tests(AndOrDagTest)

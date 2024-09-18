@@ -12,7 +12,6 @@ int main(int argc, char **argv) {
     // Read graph
     string dataDir = "../real_data/";
     string graphName = "wikidata";
-    // string graphName = "example";
     std::shared_ptr<MultiLabelCSR> csrPtr = make_shared<MultiLabelCSR>();
     string graphFilePath = dataDir + graphName + "/graph.txt";
     LineSeq lseq = sop;
@@ -20,18 +19,17 @@ int main(int argc, char **argv) {
         lseq = spo;
     auto start_time = std::chrono::steady_clock::now();
     csrPtr->loadGraph(graphFilePath, lseq);
-    // csrPtr->fillStats();
     auto end_time = std::chrono::steady_clock::now();
     std::chrono::microseconds elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     std::cout << "Read graph time: " << elapsed_microseconds.count() / 1000.0 << " ms" << std::endl;
     
     // Read workload queries
     // Read multiple workloads
-    vector<size_t> workload_sz_list({10});
+    vector<size_t> workload_sz_list({10, 100});
     size_t workload_sample_sz = 10;
     for (size_t workload_sz : workload_sz_list) {
         for (size_t ssIt = 0; ssIt < workload_sample_sz; ssIt++) {
-            string queryFilePath = dataDir + graphName + "/queries_" + to_string(workload_sz) + "_" + to_string(ssIt) + ".txt";
+            string queryFilePath = "../workload_sz/queries_" + to_string(workload_sz) + "_" + to_string(ssIt) + ".txt";
             cout << "queryFilePath:" << queryFilePath << endl;
             ifstream fin(queryFilePath);
             unordered_map<string, size_t> q2freq;
@@ -44,7 +42,6 @@ int main(int argc, char **argv) {
                 else
                     it->second++;
             }
-            size_t numModes = 5;
             size_t usedSpace = 0, budget = 1000000 * workload_sz;
             bool execute = false;
             if (argc == 2 && (strcmp(argv[1], "-e") == 0 || strcmp(argv[1], "--execute") == 0)) {
@@ -52,8 +49,7 @@ int main(int argc, char **argv) {
                 execute = true;
             }
             // QueryResult qr(nullptr, false);
-            float naiveTime = 0;
-            vector<float> viewTimeVec(numModes+1, 0);
+            float naiveTime = 0, viewTime = 0;
 
             // Construct DAG and plan
             AndOrDag aod(csrPtr);
@@ -83,45 +79,42 @@ int main(int argc, char **argv) {
 
             // Choose materialized views
             float curCostReduction = 0;
-            vector<size_t> modesVec({5});
-            for (size_t i : modesVec) {
-            // for (size_t i = 1; i < numModes; i++) {
-                AndOrDag tmpAod(aod);
+            size_t mode = 5;
+            AndOrDag tmpAod(aod);
+            start_time = std::chrono::steady_clock::now();
+            curCostReduction = tmpAod.chooseMatViews(mode, usedSpace, budget);
+            end_time = std::chrono::steady_clock::now();
+            elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            std::cout << "Choose materialized views time: " << elapsed_microseconds.count() << " us" << std::endl;
+            // For each selection method, get the overall cost reduction; print the selected views and the cost reduction
+            cout << (unsigned long long)(curCostReduction) << " " << usedSpace << endl;
+            const auto &q2idx = tmpAod.getQ2idx();
+            size_t numMatViews = 0;
+            for (const auto &pr : q2idx) {
+                if (tmpAod.isMaterialized(pr.second) && !tmpAod.getNodes()[pr.second].getChildIdx().empty()) {
+                    cout << pr.first << " ";
+                    numMatViews++;
+                }
+            }
+            cout << endl << numMatViews << endl;
+            if (execute) {
                 start_time = std::chrono::steady_clock::now();
-                curCostReduction = tmpAod.chooseMatViews(i, usedSpace, budget);
+                tmpAod.materialize();
                 end_time = std::chrono::steady_clock::now();
                 elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-                std::cout << "Choose materialized views time: " << elapsed_microseconds.count() << " us" << std::endl;
-                // For each selection method, get the overall cost reduction; print the selected views and the cost reduction
-                cout << i << " " << (unsigned long long)(curCostReduction) << " " << usedSpace << endl;
-                const auto &q2idx = tmpAod.getQ2idx();
-                size_t numMatViews = 0;
-                for (const auto &pr : q2idx) {
-                    if (tmpAod.isMaterialized(pr.second) && !tmpAod.getNodes()[pr.second].getChildIdx().empty()) {
-                        cout << pr.first << " ";
-                        numMatViews++;
-                    }
-                }
-                cout << endl << numMatViews << endl;
-                if (execute) {
+                std::cout << "Materialize views time: " << elapsed_microseconds.count() << " us" << std::endl;
+                for (const auto &p: q2freq) {
+                    QueryResult qr(nullptr, false);
                     start_time = std::chrono::steady_clock::now();
-                    tmpAod.materialize();
+                    tmpAod.execute(p.first, qr);
                     end_time = std::chrono::steady_clock::now();
                     elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-                    std::cout << "Materialize views time: " << elapsed_microseconds.count() << " us" << std::endl;
-                    for (const auto &p: q2freq) {
-                        QueryResult qr(nullptr, false);
-                        start_time = std::chrono::steady_clock::now();
-                        tmpAod.execute(p.first, qr);
-                        end_time = std::chrono::steady_clock::now();
-                        elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-                        std::cout << p.first << " " << elapsed_microseconds.count() << std::endl;
-                        viewTimeVec[i] += elapsed_microseconds.count() * float(p.second);
-                        if (qr.newed)
-                            delete qr.csrPtr;
-                    }
-                    std::cout << "Mode " << i << " execution time: " << viewTimeVec[i] << " us" << std::endl;   // Considers query frequency in workload
+                    std::cout << p.first << " " << elapsed_microseconds.count() << std::endl;
+                    viewTime += elapsed_microseconds.count() * float(p.second);
+                    if (qr.newed)
+                        delete qr.csrPtr;
                 }
+                std::cout << "Execution time: " << viewTime << " us" << std::endl;   // Considers query frequency in workload
             }
         }
     }

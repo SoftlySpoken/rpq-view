@@ -23,15 +23,44 @@ struct Transition
 
 struct State
 {
-    // TODO: state ID only need to be unique within an NFA/DFA
     int id;
     std::unordered_set<int> idSet;    // For DFA converted from NFA
     std::vector<Transition> outEdges;
+    std::vector<int> lineNodesFrom, lineNodesTo;
+
     bool accept;
     State(int id_, bool accept_=false): id(id_), accept(accept_) {}
     void addTransition(int lbl_, bool forward_, std::shared_ptr<State> dst_);
     void addTransition(const Transition &tr);
     void print();
+};
+
+struct LineGraph {
+    std::vector<std::pair<int, bool>> nodeLabel; // 0: weak connection, 1: s-s, 2: s-t, 3: t-s, 4: t-t. Second is whether forward
+    std::vector<std::vector<int>> outAdj, outLabel;
+    void addNode(const std::pair<int, bool> &pr) {
+        nodeLabel.emplace_back(pr.first, pr.second);
+        outAdj.emplace_back();
+        outLabel.emplace_back();
+    }
+    void addEdge(int u, int v, int lbl) {
+        outAdj[u].emplace_back(v);
+        outLabel[u].emplace_back(lbl);
+    }
+    LineGraph operator * (const LineGraph &lg) const;
+    LineGraph operator *= (const LineGraph &lg) {
+        LineGraph prod = *this * lg;
+        std::swap(prod, *this);
+        return *this;
+    }
+    // Return edge label if found (the first edge found), -1 otherwise
+    int findEdge(int u, int v) const {
+        if (u >= int(outAdj.size())) return -1;
+        for (size_t i = 0; i < outAdj[u].size(); i++)
+            if (outAdj[u][i] == v) return outLabel[u][i];
+        return -1;
+    }
+    int getType() const;
 };
 
 /**
@@ -44,6 +73,7 @@ struct NFA
     std::shared_ptr<State> initial;
     std::vector<std::shared_ptr<State>> accepts;    // Prevents searching for accept states on the fly
     int curMaxId;
+    LineGraph lg;
 
     std::shared_ptr<State> addState(bool accept_);
     void addStates(std::vector<std::shared_ptr<State>> someStates);
@@ -82,4 +112,7 @@ struct NFA
         vis = vis_;
         outerVis = true;
     }
+    std::shared_ptr<NFA> minimizeDfa();
+    void fillLineGraph();
+    void removeSelfLoop();
 };

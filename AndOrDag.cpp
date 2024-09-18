@@ -615,7 +615,6 @@ float AndOrDag::chooseMatViews(char mode, size_t &usedSpace, size_t spaceBudget,
                     if (curChildIdx.size() == 1) {
                         char curOpType = nodes[curChildIdx[0]].getOpType();
                         if (curOpType == 2 || curOpType == 3)
-                            // pq.emplace(i, float(freq[i]) * (cost[i] - card[i]));
                             pq.emplace(i, freq[i]);
                     }
                 }
