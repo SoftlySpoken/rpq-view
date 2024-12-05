@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.14)
 project(my_project)
 
 # GoogleTest requires at least C++14
-# set(CMAKE_CXX_COMPILER "/usr/local/bin/g++")
-# set(CMAKE_C_COMPILER "/usr/local/bin/gcc")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_COMPILER_VERSION "10.1.0")
@@ -67,50 +65,50 @@ add_executable(
   swarmGuide.cpp AndOrDag.cpp Util.cpp CSR.cpp NFA.cpp Rpq2NFAConvertor.cpp
   parser/rpqBaseListener.cpp parser/rpqBaseVisitor.cpp parser/rpqLexer.cpp parser/rpqListener.cpp parser/rpqParser.cpp parser/rpqVisitor.cpp
 )
-target_include_directories(AndOrDagTest PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
-target_include_directories(ours PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
-target_include_directories(varyWorkloadSz PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
-target_include_directories(varyMemBudget PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
-target_include_directories(CompareAndOrDagDfa PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
-target_include_directories(matMostFrequent PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
-target_include_directories(unitCost PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
-target_include_directories(productGraphQueryBatch PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
-target_include_directories(swarmGuide PRIVATE /home/pangyue/gstore/tools/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(AndOrDagTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(ours PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(varyWorkloadSz PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(varyMemBudget PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(CompareAndOrDagDfa PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(matMostFrequent PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(unitCost PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(productGraphQueryBatch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/antlr4-cpp-runtime-4/runtime/src/)
+target_include_directories(swarmGuide PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/antlr4-cpp-runtime-4/runtime/src/)
 target_link_libraries(
   AndOrDagTest
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a GTest::gtest_main OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/libantlr4-runtime.a GTest::gtest_main OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
   ours
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
   varyWorkloadSz
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
   varyMemBudget
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
   CompareAndOrDagDfa
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
   matMostFrequent
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
   unitCost
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/libantlr4-runtime.a OpenMP::OpenMP_CXX ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
   productGraphQueryBatch
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a ${TBB_IMPORTED_TARGETS}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/libantlr4-runtime.a ${TBB_IMPORTED_TARGETS}
 )
 target_link_libraries(
   swarmGuide
-  PRIVATE /home/pangyue/gstore/lib/libantlr4-runtime.a ${TBB_IMPORTED_TARGETS}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/libantlr4-runtime.a ${TBB_IMPORTED_TARGETS}
 )
 target_compile_options(AndOrDagTest PRIVATE -g -Wall -std=c++17 -DTEST $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
 target_compile_options(ours PRIVATE -g -Wall -std=c++17 -O3 $<$<COMPILE_LANGUAGE:CXX>:${OpenMP_CXX_FLAGS}>)
