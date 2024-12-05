@@ -1,5 +1,36 @@
 This is the code repository accompanying the paper titled "Materialized View Selection & View-Based Query Planning for Regular Path Queries", accepted by SIGMOD 2024. Authors: Yue Pang (PKU), Lei Zou (PKU), Jeffrey Xu Yu (CUHK), Linglin Yang (PKU).
 
+## Prerequisites
+
+Please run the following steps before compiling the code.
+
+Without further specification, all the commands in this document are run in the `rpq-view` root directory.
+
+### [googletest](https://github.com/google/googletest)
+
+```bash
+$ cd third_party
+$ git clone git@github.com:google/googletest.git
+```
+
+### tbb
+
+```bash
+$ sudo apt-get install libtbb-dev		# for Ubuntu
+$ sudo yum -y install tbb-devel			# for CentOS
+```
+
+### ANTLR4
+
+```bash
+$ mkdir lib
+$ tar -xzvf antlr4-cpp-runtime-4.tar.gz
+$ cd antlr4-cpp-runtime-4/
+$ cmake .
+$ make -j
+$ cp dist/libantlr4-runtime.a ../lib/
+```
+
 ## Compiling the code
 
 ```bash
@@ -9,7 +40,7 @@ $ cmake --build build -j
 
 ## Obtaining the data
 
-The dataset we used is too large to upload to GitHub. It can be downloaded [here](https://disk.pku.edu.cn/link/AA53ABC8A0878D484FB5593320B0D59C03). Please decompress it and copy the contents to a newly created directory `real_data/` under the cwd `rpq-view/`:
+The dataset we used is too large to upload to GitHub. It can be downloaded [here](https://www.jianguoyun.com/p/DRVlc_MQ0J6KCxjF9qYFIAA). Please decompress it and copy the contents to a newly created directory `real_data/` under the cwd `rpq-view/`:
 
 ```bash
 $ tar -xzvf wikidata.tar.gz
