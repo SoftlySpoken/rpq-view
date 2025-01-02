@@ -1,42 +1,6 @@
 This is the code repository accompanying the paper titled "Materialized View Selection & View-Based Query Planning for Regular Path Queries", accepted by SIGMOD 2024. Authors: Yue Pang (PKU), Lei Zou (PKU), Jeffrey Xu Yu (CUHK), Linglin Yang (PKU).
 
-## Prerequisites
-
-Please run the following steps before compiling the code.
-
-Without further specification, all the commands in this document are run in the `rpq-view` root directory.
-
-### [googletest](https://github.com/google/googletest)
-
-```bash
-$ cd third_party
-$ git clone git@github.com:google/googletest.git
-```
-
-### tbb
-
-```bash
-$ sudo apt-get install libtbb-dev		# for Ubuntu
-$ sudo yum -y install tbb-devel			# for CentOS
-```
-
-### ANTLR4
-
-```bash
-$ mkdir lib
-$ tar -xzvf antlr4-cpp-runtime-4.tar.gz
-$ cd antlr4-cpp-runtime-4/
-$ cmake .
-$ make -j
-$ cp dist/libantlr4-runtime.a ../lib/
-```
-
-## Compiling the code
-
-```bash
-$ cmake -S . -B build
-$ cmake --build build -j
-```
+Without further specification, all the commands in this document are run in the `rpq-view` root directory. (In the docker container, the corresponding directory would be `/usr/src/rpq-view`.)
 
 ## Obtaining the data
 
@@ -48,9 +12,78 @@ $ mkdir real_data
 $ mv wikidata/ real_data/
 ```
 
+## Compiling the code
+
+### Using Docker
+
+Using our Docker container eliminates the need for manually compiling the code. Our docker image can be downloaded [here](https://disk.pku.edu.cn/link/AA4D9C3472A9584620846634943405B517).
+
+After obtaining the image, please run the following commands under the directory where the image is located:
+
+```bash
+# Load the image
+$ docker load -i rpq-view.image.tar
+# The following command should show an image tagged rpq-view:rpq-view
+$ docker image list
+# Run the container (Please replace `/mydata/rpq-view/real_data/` by the absolute path where `wikidata/` resides)
+$ docker run -itd  --privileged --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --restart always -v /mydata/rpq-view/real_data/:/usr/data --name rpq-view rpq-view:rpq-view
+# The following command should show a contained named rpq-view
+$ docker ps -a
+# Enter the container to run experiments
+$ docker exec -it rpq-view /bin/bash
+```
+
+### Local compilation
+
+Please run the following steps before compiling the code.
+
+#### [googletest](https://github.com/google/googletest)
+
+```bash
+$ cd third_party
+$ git clone git@github.com:google/googletest.git
+```
+
+#### tbb
+
+```bash
+$ sudo apt-get install libtbb-dev		# for Ubuntu
+$ sudo yum -y install tbb-devel			# for CentOS
+```
+
+#### ANTLR4
+
+```bash
+$ mkdir lib
+$ tar -xzvf antlr4-cpp-runtime-4.tar.gz
+$ cd antlr4-cpp-runtime-4/
+$ cmake .
+$ make -j
+$ cp dist/libantlr4-runtime.a ../lib/
+```
+
+#### Other system dependencies
+
+```bash
+$ apt-get update && apt-get install -y \
+    build-essential \
+		cmake \
+    python3 \
+    libtbb-dev \
+    pkg-config \
+    uuid-dev
+```
+
+#### Compiling the code
+
+```bash
+$ cmake -S . -B build
+$ cmake --build build -j
+```
+
 ## Running the code
 
-All the following commands are run under the `build` directory unless otherwise specified.
+All the following commands are run under the `build` directory unless otherwise specified. (In the docker container, the corresponding directory would be `/usr/src/rpq-view/build`.)
 
 ### Effectiveness of Query Planning with AODC (Section 8.2)
 
@@ -71,9 +104,9 @@ $ ./matMostFrequent
 
 Interpreting the output to `stdout`:
 
-- "Total time": the query execution time using the materialized views selected by the naive MVS algorithm. (In the query, this time is compared with that of 【】)
+- "Total time": the query execution time using the materialized views selected by the naive MVS algorithm.
 
-### Impact of the Memory Budget (Section 8.4)
+### Imp act of the Memory Budget (Section 8.4)
 
 ```bash
 $ ./varyMemBudget
@@ -174,8 +207,6 @@ The last line: exeTime planExeTime, where
 - planExeTime is the planning + query execution time.
 
 In the paper, only the query execution time is accounted for.
-
-
 
 ```bash
 $ cd build
