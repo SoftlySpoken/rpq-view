@@ -4,7 +4,7 @@ Without further specification, all the commands in this document are run in the 
 
 ## Obtaining the data
 
-The dataset we used is too large to upload to GitHub. It can be downloaded [here](https://www.jianguoyun.com/p/DRVlc_MQ0J6KCxjF9qYFIAA). Please decompress it and copy the contents to a newly created directory `real_data/` under the cwd `rpq-view/`:
+The dataset we used is too large to upload to GitHub. It can be downloaded [here](https://disk.pku.edu.cn/link/AA53ABC8A0878D484FB5593320B0D59C03). Please decompress it and copy the contents to a newly created directory `real_data/` under the cwd `rpq-view/`:
 
 ```bash
 $ tar -xzvf wikidata.tar.gz
