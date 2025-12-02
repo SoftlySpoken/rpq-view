@@ -553,6 +553,24 @@ int LineGraph::getType() const {
     return 2;
 }
 
+/**
+ * @brief Constructs a line graph representation of the NFA for query processing
+ *
+ * This function builds a line graph from the NFA structure where each edge in the original
+ * NFA becomes a node in the line graph. The line graph is used for efficient path query
+ * execution and supports different types of connections:
+ * - Label 1: source-to-source connections (bidirectional)
+ * - Label 2: source-to-target connections
+ * - Label 3: target-to-source connections
+ * - Label 4: target-to-target connections (bidirectional)
+ *
+ * The algorithm performs a depth-first traversal of the NFA states and creates line graph
+ * nodes for each transition, establishing the appropriate connectivity patterns based on
+ * the transition endpoints and directions.
+ *
+ * @note The line graph structure is stored in the member variable `lg`
+ * @see LineGraph structure for connection type definitions
+ */
 void NFA::fillLineGraph() {
     stack<shared_ptr<State>> st;
     st.emplace(initial);
